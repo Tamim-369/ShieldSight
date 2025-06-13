@@ -1,0 +1,31 @@
+ .\main.exe
+Traceback (most recent call last):
+  File "main.py", line 5, in <module>
+  File "PyInstaller\loader\pyimod02_importers.py", line 457, in exec_module
+  File "monitor\__init__.py", line 1, in <module>
+  File "PyInstaller\loader\pyimod02_importers.py", line 457, in exec_module
+  File "monitor\monitor.py", line 23, in <module>
+  File "transformers\pipelines\__init__.py", line 942, in pipeline
+    framework, model = infer_framework_load_model(
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        adapter_path if adapter_path is not None else model,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **model_kwargs,
+        ^^^^^^^^^^^^^^^
+    )
+    ^
+  File "transformers\pipelines\base.py", line 292, in infer_framework_load_model
+    model = model_class.from_pretrained(model, **kwargs)
+  File "transformers\models\auto\auto_factory.py", line 547, in from_pretrained
+    has_local_code = type(config) in cls._model_mapping.keys()
+                                     ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "transformers\models\auto\auto_factory.py", line 792, in keys
+    self._load_attr_from_module(key, name)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "transformers\models\auto\auto_factory.py", line 787, in _load_attr_from_module
+    self._modules[module_name] = importlib.import_module(f".{module_name}", "transformers.models")
+                                 ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "importlib\__init__.py", line 88, in import_module
+ModuleNotFoundError: No module named 'transformers.models.shieldgemma2'
+[PYI-16176:ERROR] Failed to execute script 'main' due to unhandled exception!
