@@ -3,15 +3,15 @@ AppName=mindWallX
 AppVersion=1.0
 DefaultDirName={pf}\mindWallX
 DefaultGroupName=mindWallX
-OutputDir=C:\Users\Tanvir\Desktop\distruction\dist
+OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=mindWallXSetup
 SetupIconFile=assets\logo.ico
 Compression=lzma
 SolidCompression=yes
 
 [Files]
-Source: "C:\Users\Tanvir\Desktop\distruction\dist\main.exe"; DestDir: "{app}"
-Source: "C:\Users\Tanvir\Desktop\distruction\assets\logo.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\dist\main.exe"; DestDir: "{app}"
+Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\assets\logo.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 
 [Icons]
