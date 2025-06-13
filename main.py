@@ -2,11 +2,12 @@ import customtkinter as ctk
 import threading
 import sys
 import os
-from monitor import main, stop_monitoring, load_model, loading_complete, loading_error
+import json
+from monitor import main, stop_monitoring, load_model, loading_complete, loading_error, set_nsfw_threshold
 from utils import setup_auto_start, check_existing_process, get_close_tab_action, set_close_tab_action
 import pystray
 from pystray import Menu, MenuItem
-from PIL import Image
+from PIL import Image, ImageTk
 import platform
 import time
 
@@ -23,12 +24,14 @@ class App:
         self.root.geometry("600x400")
         self.root.resizable(False, False)
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")  # Changed to .ico
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         if os.path.exists(icon_path):
             try:
-                self.root.iconbitmap(icon_path)
+                icon_img = Image.open(icon_path).convert("RGB")
+                photo = ImageTk.PhotoImage(icon_img.resize((16, 16), Image.Resampling.LANCZOS))
+                self.root.iconphoto(True, photo)
             except Exception as e:
-                print(f"Failed to set iconbitmap: {e}, skipping icon")
+                print(f"Failed to set iconphoto: {e}, skipping icon")
         else:
             print(f"Icon file not found at: {icon_path}, skipping icon")
         self.running_thread = None
@@ -41,6 +44,10 @@ class App:
         self.model_loaded_once = False
         self.loader_frames = ["|", "/", "-", "\\"]  # Text-based spinner
         self.loader_index = 0
+
+        # Load saved threshold and close tab action
+        self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        self.load_config()
 
         # Center layout config
         self.root.grid_rowconfigure(0, weight=1)
@@ -142,6 +149,35 @@ class App:
         self.setup_tray()
         self.check_existing_process()
 
+    def load_config(self):
+        global NSFW_THRESHOLD
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r') as f:
+                    config = json.load(f)
+                    NSFW_THRESHOLD = float(config.get("nsfw_threshold", 0.01))
+                    close_tab_action = config.get("close_tab_action", ["Ctrl", "Shift", "Q"])
+                    set_close_tab_action(close_tab_action)
+                    print(f"Loaded NSFW threshold from config: {NSFW_THRESHOLD}")
+                    print(f"Loaded close tab action from config: {close_tab_action}")
+        except Exception as e:
+            print(f"Error loading config: {e}, using default threshold 0.01 and close tab action Ctrl+Shift+Q")
+            NSFW_THRESHOLD = 0.01
+            set_close_tab_action(["Ctrl", "Shift", "Q"])
+
+    def save_config(self, threshold, close_tab_action):
+        try:
+            config = {
+                "nsfw_threshold": float(threshold),
+                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "Shift", "Q"]
+            }
+            with open(self.config_path, 'w') as f:
+                json.dump(config, f)
+            print(f"Saved NSFW threshold to config: {threshold}")
+            print(f"Saved close tab action to config: {close_tab_action}")
+        except Exception as e:
+            print(f"Error saving config: {e}")
+
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         if os.path.exists(icon_path):
@@ -193,12 +229,19 @@ class App:
     def open_settings(self):
         settings_window = ctk.CTkToplevel(self.root)
         settings_window.title("Settings")
-        settings_window.geometry("300x150")
-        settings_window.resizable(False, False)
+        settings_window.geometry("400x250")  # Initial size to fit content
         settings_window.transient(self.root)
         settings_window.update_idletasks()
         settings_window.grab_set()
 
+        # Configure window to be resizable
+        settings_window.grid_rowconfigure(0, weight=1)
+        settings_window.grid_rowconfigure(1, weight=1)
+        settings_window.grid_rowconfigure(2, weight=1)
+        settings_window.grid_columnconfigure(0, weight=1)
+        settings_window.grid_columnconfigure(1, weight=1)
+
+        # Close Tab Action
         action_label = ctk.CTkLabel(
             settings_window,
             text="Close Tab Action:",
@@ -215,28 +258,68 @@ class App:
         )
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
+        # Sensitivity Threshold
+        sensitivity_label = ctk.CTkLabel(
+            settings_window,
+            text="Sensitivity Threshold (0-1):",
+            font=ctk.CTkFont("Segoe UI", 14),
+            text_color="white"
+        )
+        sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
+
+        sensitivity_entry = ctk.CTkEntry(
+            settings_window,
+            font=ctk.CTkFont("Segoe UI", 12),
+            placeholder_text=str(NSFW_THRESHOLD)  # Use current NSFW_THRESHOLD
+        )
+        sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
+
+        # Save Button
         save_button = ctk.CTkButton(
             settings_window,
             text="Save",
-            command=lambda: self.save_action(action_entry.get(), settings_window),
+            command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), sensitivity_entry, action_entry, settings_window),
             width=100,
             height=30,
             font=ctk.CTkFont("Segoe UI", 12, weight="bold"),
             fg_color="#2e89ff",
             hover_color="#1e5fc1"
         )
-        save_button.grid(row=1, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+        save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str, window):
+    def save_action(self, action_str, sensitivity_str, sensitivity_entry, action_entry, window):
         try:
-            keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
-            if not keys or any(not k for k in keys):
-                raise ValueError("Invalid action format. Use format like 'Ctrl+Shift+Q' or 'Alt+F4'")
-            valid_modifiers = {"ctrl", "alt", "shift"}
-            valid_keys = {chr(i) for i in range(ord('a'), ord('z')+1)} | {str(i) for i in range(1, 13)} | {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc", "w", "q"}
-            if not any(k.lower() in valid_modifiers for k in keys) or not any(k.lower() not in valid_modifiers for k in keys):
-                raise ValueError("Action must include at least one modifier (Ctrl, Alt, Shift) and one key (a-z, F1-F12, Esc, W, Q)")
-            set_close_tab_action(keys)
+            # Validate and save sensitivity threshold first
+            threshold_updated = False
+            if sensitivity_str:
+                threshold = float(sensitivity_str)
+                if not 0 <= threshold <= 1:
+                    raise ValueError("Threshold must be between 0 and 1")
+                set_nsfw_threshold(threshold)  # Update in program
+                threshold_updated = True
+            elif not threshold_updated:
+                set_nsfw_threshold(0.01)  # Default if empty
+
+            # Validate and save close tab action
+            action_updated = False
+            if action_str.strip():
+                keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
+                if not keys or any(not k for k in keys):
+                    raise ValueError("Invalid action format. Use format like 'Ctrl+Shift+Q' or 'Alt+F4'")
+                valid_modifiers = {"ctrl", "alt", "shift"}
+                valid_keys = {chr(i) for i in range(ord('a'), ord('z')+1)} | {str(i) for i in range(1, 13)} | {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc", "w", "q"}
+                if not any(k.lower() in valid_modifiers for k in keys) or not any(k.lower() not in valid_modifiers for k in keys):
+                    raise ValueError("Action must include at least one modifier (Ctrl, Alt, Shift) and one key (a-z, F1-F12, Esc, W, Q)")
+                set_close_tab_action(keys)
+                action_entry.configure(placeholder_text=action_str)
+                action_updated = True
+            elif not action_updated:
+                set_close_tab_action(["Ctrl", "Shift", "Q"])
+                action_entry.configure(placeholder_text="Ctrl+Shift+Q")
+
+            # Save both to config
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action())
+
             window.destroy()
         except ValueError as e:
             ctk.CTkLabel(
@@ -244,7 +327,12 @@ class App:
                 text=str(e),
                 font=ctk.CTkFont("Segoe UI", 12),
                 text_color="red"
-            ).grid(row=2, column=0, columnspan=2, pady=5)
+            ).grid(row=3, column=0, columnspan=2, pady=5)
+            if "Threshold" not in str(e) and not threshold_updated:
+                set_nsfw_threshold(0.01)  # Reset only if action error and threshold not set
+            if "Action" in str(e) and not action_updated:
+                set_close_tab_action(["Ctrl", "Shift", "Q"])
+                action_entry.configure(placeholder_text="Ctrl+Shift+Q")
 
     def check_existing_process(self):
         if check_existing_process(self.script_path):

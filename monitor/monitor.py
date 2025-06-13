@@ -7,7 +7,7 @@ from transformers import pipeline
 from PIL import Image
 import torch
 from pyautogui import hotkey
-from utils import get_close_tab_action
+from utils.config import get_close_tab_action
 import threading
 
 # Set device to CPU
@@ -24,40 +24,47 @@ classifier = None
 loading_complete = False
 loading_error = None
 model_lock = threading.Lock()
+loading_start_time = None
+NSFW_THRESHOLD = 0.01  # Default threshold
+
+def set_nsfw_threshold(threshold):
+    global NSFW_THRESHOLD
+    NSFW_THRESHOLD = float(threshold)
+    print(f"NSFW threshold updated to: {NSFW_THRESHOLD}")
 
 def load_model(progress_callback=None):
-    """Load the NSFW model with progress feedback."""
-    global classifier, loading_complete, loading_error
+    global classifier, loading_complete, loading_error, loading_start_time
     with model_lock:
-        print(f"Loading model (attempt: {getattr(load_model, 'call_count', 0) + 1})")
-        load_model.call_count = getattr(load_model, 'call_count', 0) + 1
-        if classifier is not None:
-            print("Model already loaded, skipping.")
+        if loading_complete or classifier is not None:
+            print("Model already loaded or loading complete, skipping.")
             if progress_callback:
                 progress_callback(100, "Model already loaded!")
             return
+        print(f"Loading model (attempt: {getattr(load_model, 'call_count', 0) + 1})")
+        load_model.call_count = getattr(load_model, 'call_count', 0) + 1
+        loading_start_time = time.time()
         try:
             if progress_callback:
                 progress_callback(0, "Starting model load...")
-            classifier = pipeline("image-classification", model=MODEL_NAME, device=device, use_fast=True)
+            print(f"Attempting to load model from: {MODEL_NAME}, device: {device}")
+            classifier = pipeline("image-classification", model=MODEL_NAME, device=device, use_fast=True)  # Removed cache_dir
+            print(f"Classifier initialized: {classifier is not None}")
             if progress_callback:
                 progress_callback(50, "Model half-loaded...")
-            print("Successfully loaded model!")
+            print(f"Model loaded in {time.time() - loading_start_time:.2f} seconds!")
             loading_complete = True
             if progress_callback:
                 progress_callback(100, "Model loaded successfully!")
         except Exception as e:
             loading_error = str(e)
             print(f"Failed to load model: {e}")
+            classifier = None  # Ensure classifier is None on failure
             if progress_callback:
                 progress_callback(100, f"Error: {e}")
 
-# Threshold for NSFW detection
-NSFW_THRESHOLD = 0.2
-
 def has_adult_content(image):
-    """Check if an image contains adult content."""
-    global classifier, loading_error
+    global classifier, loading_error, NSFW_THRESHOLD
+    print(f"Checking adult content, classifier: {classifier is not None}, threshold: {NSFW_THRESHOLD}")
     if not classifier:
         return False, None, 0
     try:
@@ -83,30 +90,15 @@ def has_adult_content(image):
         return False, None, 0
 
 def capture_screen():
-    """Capture the entire screen using mss and convert to OpenCV format."""
     with mss.mss() as sct:
-        if not hasattr(capture_screen, 'monitors_printed'):
-            print("Available monitors:", sct.monitors)
-            capture_screen.monitors_printed = True
         monitor = sct.monitors[1]
         screenshot = sct.grab(monitor)
-        print(f"Monitor: width={screenshot.width}, height={screenshot.height}")
-        print(f"RGB data size: {len(screenshot.rgb)}")
-        total_pixels = screenshot.width * screenshot.height
-        channels = len(screenshot.rgb) // total_pixels
-        if channels not in [3, 4]:
-            raise ValueError(f"Unexpected number of channels: {channels}")
-        print(f"Detected channels: {channels}")
-        img = np.frombuffer(screenshot.rgb, dtype=np.uint8)
-        img = img.reshape((screenshot.height, screenshot.width, channels))
-        if channels == 4:
+        img = np.array(screenshot)
+        if img.shape[2] == 4:  # RGBA
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         return img
 
 def speak_alert(content_type, score):
-    """Speak an alert when adult content is detected."""
     message = f"Warning: Detected {content_type} with confidence {score:.2f}. Please review the content."
     print(message)
     hotkey(*get_close_tab_action())
@@ -115,27 +107,18 @@ def speak_alert(content_type, score):
     # engine.runAndWait()
 
 def main():
-    """Monitor screen for adult content in real-time."""
     global classifier, loading_complete
     print("Starting screen monitoring for adult content...")
-    try:
-        while getattr(main, 'running', True):
-            if not classifier:
-                print("Model not loaded yet.")
-                time.sleep(1)
-                continue
-            screen_img = capture_screen()
-            is_adult, content_type, score = has_adult_content(screen_img)
-            if is_adult:
-                speak_alert(content_type, score)
+    while True:
+        if not classifier:
+            print("Model not loaded yet.")
             time.sleep(1)
-    except KeyboardInterrupt:
-        print("Monitoring stopped by user.")
-    except Exception as e:
-        print(f"Error in monitoring loop: {e}")
-    finally:
-        main.running = False
+            continue
+        screen_img = capture_screen()
+        is_adult, content_type, score = has_adult_content(screen_img)
+        if is_adult:
+            speak_alert(content_type, score)
+        time.sleep(1)
 
 def stop_monitoring():
-    """Stop the monitoring loop."""
-    main.running = False
+    print("Stopping monitoring...")
