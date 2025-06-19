@@ -8,7 +8,6 @@ OutputBaseFilename=ShieldSightSetup
 SetupIconFile=dist\main\assets\logo.ico
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64
 
 [Files]
 ; Include everything inside the dist/main folder (from --onedir build)

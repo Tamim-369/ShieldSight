@@ -25,7 +25,7 @@ class App:
         self.root.geometry("600x400")
         self.root.resizable(False, False)
         # Set window icon
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         if os.path.exists(icon_path):
             try:
                 self.root.wm_iconbitmap(icon_path)  # for .ico window icon
