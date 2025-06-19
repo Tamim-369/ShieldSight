@@ -1,7 +1,6 @@
 [Setup]
 AppName=ShieldSight
 AppVersion=1.0
-Publisher=Automnex
 DefaultDirName={commonpf}\ShieldSight
 DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
