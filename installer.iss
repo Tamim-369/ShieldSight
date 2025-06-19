@@ -5,7 +5,7 @@ DefaultDirName={commonpf}\ShieldSight
 DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=ShieldSightSetup
-SetupIconFile=dist\main\assets\logo.ico
+SetupIconFile=assets\logo.ico
 Compression=lzma
 SolidCompression=yes
 
