@@ -1,1 +1,1 @@
-{"nsfw_threshold": 1.0, "close_tab_action": ["Ctrl", "Shift", "Q"]}
+{"nsfw_threshold": 0.01, "close_tab_action": ["Ctrl", "w"]}

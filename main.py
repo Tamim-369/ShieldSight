@@ -3,7 +3,7 @@ import threading
 import sys
 import os
 import json
-from monitor import main, stop_monitoring, load_model, loading_complete, loading_error, set_nsfw_threshold
+from monitor import main, stop_monitoring, load_model, loading_complete, loading_error, set_nsfw_threshold, NSFW_THRESHOLD
 from utils import setup_auto_start, check_existing_process, get_close_tab_action, set_close_tab_action
 import pystray
 from pystray import Menu, MenuItem
@@ -157,20 +157,20 @@ class App:
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
                     NSFW_THRESHOLD = float(config.get("nsfw_threshold", 0.01))
-                    close_tab_action = config.get("close_tab_action", ["Ctrl", "Shift", "Q"])
+                    close_tab_action = config.get("close_tab_action", ["Ctrl", "w"])
                     set_close_tab_action(close_tab_action)
                     print(f"Loaded NSFW threshold from config: {NSFW_THRESHOLD}")
                     print(f"Loaded close tab action from config: {close_tab_action}")
         except Exception as e:
-            print(f"Error loading config: {e}, using default threshold 0.01 and close tab action Ctrl+Shift+Q")
+            print(f"Error loading config: {e}, using default threshold 0.01 and close tab action Ctrl+w")
             NSFW_THRESHOLD = 0.01
-            set_close_tab_action(["Ctrl", "Shift", "Q"])
+            set_close_tab_action(["Ctrl", "w"])
 
     def save_config(self, threshold, close_tab_action):
         try:
             config = {
                 "nsfw_threshold": float(threshold),
-                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "Shift", "Q"]
+                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "w"]
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f)
@@ -307,7 +307,7 @@ class App:
                 keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
                 if not keys or any(not k for k in keys):
                     raise ValueError("Invalid action format. Use format like 'Ctrl+Shift+Q' or 'Alt+F4'")
-                valid_modifiers = {"ctrl", "alt", "shift"}
+                valid_modifiers = {"ctrl", "alt", "shift", "win", "cmd"}
                 valid_keys = {chr(i) for i in range(ord('a'), ord('z')+1)} | {str(i) for i in range(1, 13)} | {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc", "w", "q"}
                 if not any(k.lower() in valid_modifiers for k in keys) or not any(k.lower() not in valid_modifiers for k in keys):
                     raise ValueError("Action must include at least one modifier (Ctrl, Alt, Shift) and one key (a-z, F1-F12, Esc, W, Q)")
@@ -315,8 +315,8 @@ class App:
                 action_entry.configure(placeholder_text=action_str)
                 action_updated = True
             elif not action_updated:
-                set_close_tab_action(["Ctrl", "Shift", "Q"])
-                action_entry.configure(placeholder_text="Ctrl+Shift+Q")
+                set_close_tab_action(["Ctrl", "w"])
+                action_entry.configure(placeholder_text="Ctrl+w")
 
             # Save both to config
             self.save_config(NSFW_THRESHOLD, get_close_tab_action())
@@ -332,8 +332,8 @@ class App:
             if "Threshold" not in str(e) and not threshold_updated:
                 set_nsfw_threshold(0.01)  # Reset only if action error and threshold not set
             if "Action" in str(e) and not action_updated:
-                set_close_tab_action(["Ctrl", "Shift", "Q"])
-                action_entry.configure(placeholder_text="Ctrl+Shift+Q")
+                set_close_tab_action(["Ctrl", "w"])
+                action_entry.configure(placeholder_text="Ctrl+w")
 
     def check_existing_process(self):
         if check_existing_process(self.script_path):
