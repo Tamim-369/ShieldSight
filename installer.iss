@@ -5,13 +5,13 @@ DefaultDirName={commonpf}\ShieldSight
 DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=ShieldSightSetup
-SetupIconFile=assets\logo.png
+SetupIconFile=assets\logo.ico
 Compression=lzma
 SolidCompression=yes
 
 [Files]
 Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\dist\main.exe"; DestDir: "{app}"
-Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\assets\logo.png"; DestDir: "{app}\assets"; Flags: ignoreversion
+Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\assets\logo.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 
 [Icons]
