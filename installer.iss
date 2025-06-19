@@ -1,10 +1,10 @@
 [Setup]
-AppName=mindWallX
+AppName=ShieldSight
 AppVersion=1.0
-DefaultDirName={pf}\mindWallX
-DefaultGroupName=mindWallX
+DefaultDirName={pf}\ShieldSight
+DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
-OutputBaseFilename=mindWallXSetup
+OutputBaseFilename=ShieldSightSetup
 SetupIconFile=assets\logo.ico
 Compression=lzma
 SolidCompression=yes
@@ -15,5 +15,5 @@ Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\assets\logo.ico"; Dest
 
 
 [Icons]
-Name: "{group}\mindWallX"; Filename: "{app}\main.exe"; WorkingDir: "{app}"
-Name: "{commonstartup}\mindWallX"; Filename: "{app}\main.exe"; WorkingDir: "{app}"
+Name: "{group}\ShieldSight"; Filename: "{app}\main.exe"; WorkingDir: "{app}"
+Name: "{commonstartup}\ShieldSight"; Filename: "{app}\main.exe"; WorkingDir: "{app}"

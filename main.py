@@ -20,7 +20,7 @@ __version__ = "1.0"
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"mindWallX v{__version__}")
+        self.root.title(f"ShieldSight v{__version__}")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
         # Set window icon
@@ -74,7 +74,7 @@ class App:
         # Title Label
         self.title_label = ctk.CTkLabel(
             self.box_frame,
-            text=f"mindWallX v{__version__}",
+            text=f"ShieldSight v{__version__}",
             font=ctk.CTkFont("Segoe UI", 24, weight="bold"),
             text_color="white"
         )
@@ -124,7 +124,7 @@ class App:
         # Footer
         self.footer = ctk.CTkLabel(
             self.box_frame,
-            text="© 2025 mindWallX",
+            text="© 2025 ShieldSight",
             font=ctk.CTkFont("Segoe UI", 10),
             text_color="#888"
         )
@@ -190,7 +190,7 @@ class App:
             MenuItem("Exit", self.exit_app),
             MenuItem(f"Status: {self.status}", lambda icon, item: None, enabled=False)
         )
-        self.icon = pystray.Icon("mindWallX", image, "mindWallX", menu)
+        self.icon = pystray.Icon("ShieldSight", image, "ShieldSight", menu)
         def on_left_click(icon, data):
             if not self.is_visible:
                 self.show_window(icon, None)
