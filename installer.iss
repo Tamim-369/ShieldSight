@@ -1,7 +1,7 @@
 [Setup]
 AppName=ShieldSight
 AppVersion=1.0
-DefaultDirName={pf}\ShieldSight
+DefaultDirName={commonpf}\ShieldSight
 DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=ShieldSightSetup

@@ -27,11 +27,12 @@ class App:
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         if os.path.exists(icon_path):
             try:
+                self.root.wm_iconbitmap(icon_path)  # for .ico window icon
                 icon_img = Image.open(icon_path).convert("RGB")
                 photo = ImageTk.PhotoImage(icon_img.resize((16, 16), Image.Resampling.LANCZOS))
-                self.root.iconphoto(True, photo)
+                self.root.iconphoto(True, photo)  # taskbar + alt+tab icon
             except Exception as e:
-                print(f"Failed to set iconphoto: {e}, skipping icon")
+                print(f"Failed to set icon: {e}")
         else:
             print(f"Icon file not found at: {icon_path}, skipping icon")
         self.running_thread = None
@@ -143,7 +144,6 @@ class App:
             corner_radius=15
         )
         self.settings_button.grid(row=0, column=1, pady=(10, 5), padx=(0, 10), sticky="ne")
-
         # Handle close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
