@@ -16,7 +16,8 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
 __version__ = "1.0"
-
+__publisher__ = "Automnex Team"
+__publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 class App:
     def __init__(self, root):
         self.root = root
