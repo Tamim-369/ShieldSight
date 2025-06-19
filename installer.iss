@@ -7,6 +7,7 @@ OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=ShieldSightSetup
 SetupIconFile=assets\logo.ico
 Compression=lzma
+Publisher=Automnex
 SolidCompression=yes
 
 [Files]
