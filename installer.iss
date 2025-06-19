@@ -1,20 +1,26 @@
 [Setup]
 AppName=ShieldSight
 AppVersion=1.0
+Publisher=Automnex
 DefaultDirName={commonpf}\ShieldSight
 DefaultGroupName=ShieldSight
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
 OutputBaseFilename=ShieldSightSetup
-SetupIconFile=assets\logo.ico
+SetupIconFile=dist\main\assets\logo.ico
 Compression=lzma
-Publisher=Automnex
 SolidCompression=yes
+ArchitecturesInstallIn64BitMode=x64
 
 [Files]
-Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\dist\main.exe"; DestDir: "{app}"
-Source: "C:\Users\Tanvir\Desktop\distructionOfDistraction\assets\logo.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
-
+; Include everything inside the dist/main folder (from --onedir build)
+Source: "dist\main\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\ShieldSight"; Filename: "{app}\main.exe"; WorkingDir: "{app}"
-Name: "{commonstartup}\ShieldSight"; Filename: "{app}\main.exe"; WorkingDir: "{app}"
+; Start Menu Shortcut
+Name: "{group}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
+
+; Optional: Desktop Shortcut
+Name: "{commondesktop}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
+
+; Optional: Launch on Boot
+Name: "{commonstartup}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
