@@ -10,6 +10,7 @@ from pystray import Menu, MenuItem
 from PIL import Image, ImageTk
 import platform
 import time
+import argparse
 
 # Set appearance and theme
 ctk.set_appearance_mode("dark")
@@ -18,6 +19,7 @@ ctk.set_default_color_theme("dark-blue")
 __version__ = "1.0"
 __publisher__ = "Automnex Team"
 __publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
 class App:
     def __init__(self, root):
         self.root = root
@@ -38,7 +40,7 @@ class App:
             print(f"Icon file not found at: {icon_path}, skipping icon")
         self.running_thread = None
         self.run_in_background = ctk.BooleanVar(value=True)
-        self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if platform.system() == 'Windows' else '/main') if getattr(sys, 'frozen', False) else sys.argv[0]
+        self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if getattr(sys, 'frozen', False) else sys.argv[0])
         self.is_visible = True
         self.status = "Stopped"
         self.loading_progress = 0
@@ -46,6 +48,10 @@ class App:
         self.model_loaded_once = False
         self.loader_frames = ["|", "/", "-", "\\"]  # Text-based spinner
         self.loader_index = 0
+
+        # State file for persistence
+        self.state_file = os.path.join(os.path.dirname(__file__), "state.json")
+        self.load_state()
 
         # Load saved threshold and close tab action
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
@@ -145,10 +151,17 @@ class App:
             corner_radius=15
         )
         self.settings_button.grid(row=0, column=1, pady=(10, 5), padx=(0, 10), sticky="ne")
+
         # Handle close
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
         self.check_existing_process()
+
+        # Auto-start if in background mode and was running
+        if getattr(sys, 'background', False) and self.isRunning:
+            self.hide_window(None, None)
+            if not self.running_thread or not self.running_thread.is_alive():
+                self.toggle_monitoring()
 
     def load_config(self):
         global NSFW_THRESHOLD
@@ -178,6 +191,37 @@ class App:
             print(f"Saved close tab action to config: {close_tab_action}")
         except Exception as e:
             print(f"Error saving config: {e}")
+
+    def load_state(self):
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                    self.status = state.get("status", "Stopped")
+                    self.isRunning = self.status == "Running"
+                    self.model_loaded_once = state.get("model_loaded_once", False)
+                    print(f"Loaded state: status={self.status}, model_loaded_once={self.model_loaded_once}")
+            except Exception as e:
+                print(f"Error loading state: {e}, using defaults")
+                self.status = "Stopped"
+                self.isRunning = False
+                self.model_loaded_once = False
+        else:
+            self.status = "Stopped"
+            self.isRunning = False
+            self.model_loaded_once = False
+
+    def save_state(self):
+        state = {
+            "status": self.status,
+            "model_loaded_once": self.model_loaded_once
+        }
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f)
+            print(f"Saved state: {state}")
+        except Exception as e:
+            print(f"Error saving state: {e}")
 
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -223,6 +267,7 @@ class App:
         stop_monitoring()
         if self.running_thread:
             self.running_thread.join(timeout=2)
+        self.save_state()
         self.icon.stop()
         self.root.destroy()
         sys.exit(0)
@@ -366,6 +411,7 @@ class App:
                 self.hide_window(None, None)
                 if self.run_in_background.get():
                     setup_auto_start(True, self.script_path)
+                self.save_state()
         else:
             stop_monitoring()
             if self.running_thread:
@@ -374,6 +420,7 @@ class App:
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start")
             self.check_existing_process()
+            self.save_state()
 
     def show_progress_bar(self):
         self.loader_label.configure(text="Loading Model... |")
@@ -411,8 +458,10 @@ class App:
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start")
         setup_auto_start(self.run_in_background.get(), self.script_path)
+        self.save_state()
 
     def on_closing(self):
+        self.save_state()
         if self.run_in_background.get() and self.status == "Running":
             self.hide_window(None, None)
         else:
@@ -423,6 +472,20 @@ class App:
             sys.exit(0)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--background", action="store_true", help="Run in background mode")
+    args = parser.parse_args()
+
+    # Set background flag for auto-start
+    if args.background:
+        setattr(sys, 'background', True)
+
     root = ctk.CTk()
     app = App(root)
-    root.mainloop()
+
+    if args.background and app.isRunning:
+        app.hide_window(None, None)
+        if not app.running_thread or not app.running_thread.is_alive():
+            app.toggle_monitoring()
+    else:
+        app.root.mainloop()
