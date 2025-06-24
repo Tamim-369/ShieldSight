@@ -33,6 +33,9 @@ class App:
         self.root.geometry("600x400")
         self.root.resizable(False, False)
 
+        # Hide window initially to prevent flash
+        self.root.withdraw()
+
         # Determine script path (handle PyInstaller)
         self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
 
@@ -62,12 +65,14 @@ class App:
         self.config_path = self.config_dir / "config.json"
         self.load_config()
 
-        # Show window on first run, hide if background mode and previously started
-        if self.isStarted and getattr(sys, 'background', False):
-            self.root.withdraw()
-        else:
-            self.is_visible = True
+        # Show window only on first run (isStarted=False)
+        if not self.isStarted and not getattr(sys, 'background', False):
             self.root.deiconify()
+            self.is_visible = True
+        else:
+            self.root.withdraw()
+            self.is_visible = False
+            logging.info("Running in background mode, window hidden")
 
         # Center layout
         self.root.grid_rowconfigure(0, weight=1)
@@ -141,7 +146,7 @@ class App:
             self.start_stop_button.configure(text="Stop")
             self.update_tray_status()
 
-        # Auto-start if in background mode
+        # Auto-start monitoring if in background mode
         if getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
             self.start_monitoring()
 
@@ -212,10 +217,12 @@ class App:
         if self.is_visible:
             self.root.withdraw()
             self.is_visible = False
+            logging.info("Window hidden via toggle")
         else:
             self.root.deiconify()
             self.is_visible = True
             self.root.lift()
+            logging.info("Window shown via toggle")
 
     def exit_app(self, icon=None, item=None) -> None:
         stop_monitoring()
@@ -228,35 +235,37 @@ class App:
         sys.exit(0)
 
     def open_settings(self) -> None:
-        settings_window: ctk.CTkToplevel = ctk.CTkToplevel(self.root)
-        settings_window.title("Settings")
-        settings_window.geometry("400x200")
-        settings_window.transient(self.root)
-        settings_window.grab_set()
+        if hasattr(self, 'settings_window') and self.settings_window.winfo_exists():
+            return
+        self.settings_window: ctk.CTkToplevel = ctk.CTkToplevel(self.root)
+        self.settings_window.title("Settings")
+        self.settings_window.geometry("400x200")
+        self.settings_window.transient(self.root)
+        self.settings_window.grab_set()
 
         # Configure grid layout
         for row in range(3):
-            settings_window.grid_rowconfigure(row, weight=1)
-        settings_window.grid_columnconfigure(0, weight=1)
-        settings_window.grid_columnconfigure(1, weight=1)
+            self.settings_window.grid_rowconfigure(row, weight=1)
+        self.settings_window.grid_columnconfigure(0, weight=1)
+        self.settings_window.grid_columnconfigure(1, weight=1)
 
         # Close Tab Action
-        action_label = ctk.CTkLabel(settings_window, text="Close Tab Action:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
+        action_label = ctk.CTkLabel(self.settings_window, text="Close Tab Action:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         action_label.grid(row=0, column=0, pady=10, padx=10, sticky="w")
-        action_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12))
+        action_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
         action_entry.insert(0, "+".join(get_close_tab_action()))
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
         # Sensitivity Threshold
-        sensitivity_label = ctk.CTkLabel(settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
+        sensitivity_label = ctk.CTkLabel(self.settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
-        sensitivity_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12))
+        sensitivity_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
         sensitivity_entry.insert(0, str(NSFW_THRESHOLD))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
         # Save Button
         save_button = ctk.CTkButton(
-            settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), settings_window),
+            self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), self.settings_window),
             width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
         )
         save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
@@ -264,7 +273,6 @@ class App:
     def save_action(self, action_str: str, sensitivity_str: str, settings_window: ctk.CTkToplevel) -> None:
         try:
             global NSFW_THRESHOLD
-            # Update threshold if provided, otherwise keep current
             threshold = NSFW_THRESHOLD
             if sensitivity_str.strip():
                 threshold = float(sensitivity_str)
@@ -274,7 +282,6 @@ class App:
                 NSFW_THRESHOLD = threshold
                 logging.info(f"Updated NSFW_THRESHOLD to {threshold}")
 
-            # Update close tab action if provided, otherwise keep current
             close_tab_action = get_close_tab_action()
             if action_str.strip():
                 keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
@@ -324,7 +331,8 @@ class App:
             self.update_tray_status()
             if self.run_in_background.get():
                 setup_auto_start(True, self.script_path)
-                self.toggle_window()
+                if self.is_visible:
+                    self.toggle_window()
             self.isStarted = True
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 

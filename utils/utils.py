@@ -1,9 +1,9 @@
-import os
-import sys
-import psutil
-import platform
-from pathlib import Path
 import winreg
+import os
+import logging
+import psutil
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def check_existing_process(script_path):
     for proc in psutil.process_iter(['pid', 'cmdline']):
@@ -14,37 +14,22 @@ def check_existing_process(script_path):
             continue
     return False
 
-def setup_auto_start(enable, script_path):
-    if platform.system() == "Windows":
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
-        try:
-            if enable:
-                venv_python = Path(sys.executable).absolute()
-                winreg.SetValueEx(key, "ShieldSight", 0, winreg.REG_SZ, f'"{venv_python}" "{script_path}" --background')
-            else:
-                try:
-                    winreg.QueryValueEx(key, "ShieldSight")
-                    winreg.DeleteValue(key, "ShieldSight")
-                except OSError:
-                    pass  # Key doesn't exist, no action needed
-        except OSError as e:
-            print(f"Error accessing Registry: {e}")
-        finally:
-            winreg.CloseKey(key)
-    else:  # Linux (kept for completeness, though not your target)
-        autostart_dir = Path.home() / ".config/autostart"
-        autostart_dir.mkdir(exist_ok=True)
-        desktop_file = autostart_dir / "nsfw-screen-monitor.desktop"
-        if enable:
-            with open(desktop_file, "w") as f:
-                f.write("[Desktop Entry]\n")
-                f.write("Name=NSFW Screen Monitor\n")
-                f.write(f"Exec=/usr/bin/python3 {script_path}\n")
-                f.write("Type=Application\n")
-                f.write("Terminal=false\n")
-                f.write("Hidden=false\n")
-                f.write("NoDisplay=false\n")
-                f.write("X-GNOME-Autostart-enabled=true\n")
-        elif desktop_file.exists():
-            os.remove(desktop_file)
 
+def setup_auto_start(enable: bool, script_path: str) -> None:
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+        app_name = "ShieldSight"
+        if enable:
+            # Include --background flag in the command
+            command = f'"{script_path}" --background'
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, command)
+            logging.info(f"Auto-start enabled with command: {command}")
+        else:
+            try:
+                winreg.DeleteValue(key, app_name)
+                logging.info("Auto-start disabled")
+            except FileNotFoundError:
+                logging.debug("Auto-start entry not found, no action needed")
+        winreg.CloseKey(key)
+    except OSError as e:
+        logging.error(f"Error setting up auto-start: {e}")
