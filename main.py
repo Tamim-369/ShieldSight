@@ -33,8 +33,9 @@ class App:
         self.root.geometry("600x400")
         self.root.resizable(False, False)
 
-        # Hide window initially to prevent flash
+        # Hide window initially and sync state
         self.root.withdraw()
+        self.root.update()  # Ensure Tkinter processes withdraw
 
         # Determine script path (handle PyInstaller)
         self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
@@ -58,6 +59,7 @@ class App:
         self.is_visible = False
         self.status = "Stopped"
         self.model_loaded_once = False
+        self.last_toggle_time = 0  # For debouncing
 
         # Config setup
         self.config_dir = Path.home() / ".shieldsight"
@@ -68,7 +70,9 @@ class App:
         # Show window only on first run (isStarted=False)
         if not self.isStarted and not getattr(sys, 'background', False):
             self.root.deiconify()
+            self.root.update()
             self.is_visible = True
+            logging.info("First run: Window shown")
         else:
             self.root.withdraw()
             self.is_visible = False
@@ -214,14 +218,29 @@ class App:
             self.icon.update_menu()
 
     def toggle_window(self, icon=None, item=None) -> None:
+        # Debounce toggle (prevent rapid clicks)
+        current_time = time.time()
+        if current_time - self.last_toggle_time < 0.5:
+            logging.debug("Toggle debounced")
+            return
+        self.last_toggle_time = current_time
+
+        # Sync is_visible with actual window state
+        actual_visible = self.root.winfo_viewable()
+        if self.is_visible != actual_visible:
+            logging.warning(f"State mismatch: is_visible={self.is_visible}, actual_visible={actual_visible}")
+            self.is_visible = actual_visible
+
         if self.is_visible:
             self.root.withdraw()
+            self.root.update()
             self.is_visible = False
             logging.info("Window hidden via toggle")
         else:
             self.root.deiconify()
-            self.is_visible = True
             self.root.lift()
+            self.root.update()
+            self.is_visible = True
             logging.info("Window shown via toggle")
 
     def exit_app(self, icon=None, item=None) -> None:
