@@ -19,11 +19,9 @@ def setup_auto_start(enable, script_path):
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
         try:
             if enable:
-                # Use the Python executable from the environment and pass the script with --background
                 venv_python = Path(sys.executable).absolute()
                 winreg.SetValueEx(key, "ShieldSight", 0, winreg.REG_SZ, f'"{venv_python}" "{script_path}" --background')
             else:
-                # Check if the key exists before attempting to delete
                 try:
                     winreg.QueryValueEx(key, "ShieldSight")
                     winreg.DeleteValue(key, "ShieldSight")

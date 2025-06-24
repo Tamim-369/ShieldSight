@@ -49,11 +49,7 @@ class App:
         self.loader_frames = ["|", "/", "-", "\\"]  # Text-based spinner
         self.loader_index = 0
 
-        # State file for persistence
-        self.state_file = os.path.join(os.path.dirname(__file__), "state.json")
-        self.load_state()
-
-        # Load saved threshold and close tab action
+        # Load saved threshold, close tab action, and isStarted from config
         self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
         self.load_config()
 
@@ -157,8 +153,8 @@ class App:
         self.setup_tray()
         self.check_existing_process()
 
-        # Auto-start if in background mode and was running
-        if getattr(sys, 'background', False) and self.isRunning:
+        # Auto-start if in background mode and was started
+        if getattr(sys, 'background', False) and self.isStarted:
             self.hide_window(None, None)
             if not self.running_thread or not self.running_thread.is_alive():
                 self.toggle_monitoring()
@@ -171,57 +167,41 @@ class App:
                     config = json.load(f)
                     NSFW_THRESHOLD = float(config.get("nsfw_threshold", 0.01))
                     close_tab_action = config.get("close_tab_action", ["Ctrl", "w"])
+                    self.isStarted = config.get("isStarted", False)
                     set_close_tab_action(close_tab_action)
-                    print(f"Loaded NSFW threshold from config: {NSFW_THRESHOLD}")
-                    print(f"Loaded close tab action from config: {close_tab_action}")
+                    print(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
+            else:
+                self.isStarted = False
+                NSFW_THRESHOLD = 0.01
+                set_close_tab_action(["Ctrl", "w"])
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         except Exception as e:
-            print(f"Error loading config: {e}, using default threshold 0.01 and close tab action Ctrl+w")
+            print(f"Error loading config: {e}, using defaults")
+            self.isStarted = False
             NSFW_THRESHOLD = 0.01
             set_close_tab_action(["Ctrl", "w"])
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
-    def save_config(self, threshold, close_tab_action):
+    def save_config(self, threshold, close_tab_action, is_started):
         try:
             config = {
                 "nsfw_threshold": float(threshold),
-                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "w"]
+                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "w"],
+                "isStarted": bool(is_started)
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f)
-            print(f"Saved NSFW threshold to config: {threshold}")
-            print(f"Saved close tab action to config: {close_tab_action}")
+            print(f"Saved config: {config}")
         except Exception as e:
             print(f"Error saving config: {e}")
 
     def load_state(self):
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, 'r') as f:
-                    state = json.load(f)
-                    self.status = state.get("status", "Stopped")
-                    self.isRunning = self.status == "Running"
-                    self.model_loaded_once = state.get("model_loaded_once", False)
-                    print(f"Loaded state: status={self.status}, model_loaded_once={self.model_loaded_once}")
-            except Exception as e:
-                print(f"Error loading state: {e}, using defaults")
-                self.status = "Stopped"
-                self.isRunning = False
-                self.model_loaded_once = False
-        else:
-            self.status = "Stopped"
-            self.isRunning = False
-            self.model_loaded_once = False
+        # No longer needed separately since state is in config
+        pass
 
     def save_state(self):
-        state = {
-            "status": self.status,
-            "model_loaded_once": self.model_loaded_once
-        }
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump(state, f)
-            print(f"Saved state: {state}")
-        except Exception as e:
-            print(f"Error saving state: {e}")
+        # No longer needed separately since state is in config
+        pass
 
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -267,7 +247,7 @@ class App:
         stop_monitoring()
         if self.running_thread:
             self.running_thread.join(timeout=2)
-        self.save_state()
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)  # Reset isStarted on exit
         self.icon.stop()
         self.root.destroy()
         sys.exit(0)
@@ -364,7 +344,7 @@ class App:
                 action_entry.configure(placeholder_text="Ctrl+w")
 
             # Save both to config
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action())
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
             window.destroy()
         except ValueError as e:
@@ -411,7 +391,8 @@ class App:
                 self.hide_window(None, None)
                 if self.run_in_background.get():
                     setup_auto_start(True, self.script_path)
-                self.save_state()
+                self.isStarted = True
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         else:
             stop_monitoring()
             if self.running_thread:
@@ -420,7 +401,8 @@ class App:
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start")
             self.check_existing_process()
-            self.save_state()
+            self.isStarted = False
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def show_progress_bar(self):
         self.loader_label.configure(text="Loading Model... |")
@@ -458,10 +440,10 @@ class App:
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start")
         setup_auto_start(self.run_in_background.get(), self.script_path)
-        self.save_state()
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def on_closing(self):
-        self.save_state()
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         if self.run_in_background.get() and self.status == "Running":
             self.hide_window(None, None)
         else:
@@ -483,7 +465,7 @@ if __name__ == "__main__":
     root = ctk.CTk()
     app = App(root)
 
-    if args.background and app.isRunning:
+    if args.background and app.isStarted:
         app.hide_window(None, None)
         if not app.running_thread or not app.running_thread.is_alive():
             app.toggle_monitoring()
