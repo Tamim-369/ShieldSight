@@ -14,6 +14,9 @@ import argparse
 from pathlib import Path
 import ctypes
 import logging
+import requests
+import uuid
+import hashlib
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -36,9 +39,22 @@ class App:
         # Hide window initially and sync state
         self.root.withdraw()
         self.root.update()
+        logging.info("Root window withdrawn")
 
         # Determine script path (handle PyInstaller)
         self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+
+        # Config setup
+        self.config_dir = Path.home() / ".shieldsight"
+        self.config_dir.mkdir(exist_ok=True)
+        self.config_path = self.config_dir / "config.json"
+        self.load_config()
+        self.load_license()
+
+        # Show license dialog if no valid license key
+        if not self.isLicensed or not self.config.get("license_key", ""):
+            self.show_license_dialog()
+            return  # Defer main window setup until valid license
 
         # Set window icon
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -61,12 +77,6 @@ class App:
         self.model_loaded_once = False
         self.last_toggle_time = 0
 
-        # Config setup
-        self.config_dir = Path.home() / ".shieldsight"
-        self.config_dir.mkdir(exist_ok=True)
-        self.config_path = self.config_dir / "config.json"
-        self.load_config()
-
         # Show window only on first run (isStarted=False and not background)
         if not self.isStarted and not getattr(sys, 'background', False):
             self.root.deiconify()
@@ -76,7 +86,7 @@ class App:
         else:
             self.root.withdraw()
             self.is_visible = False
-            logging.info("isStarted=True or background mode, window hidden")
+            logging.info("isStarted=True and licensed: Window hidden")
 
         # Center layout
         self.root.grid_rowconfigure(0, weight=1)
@@ -143,8 +153,8 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
 
-        # Auto-start monitoring if isStarted=True
-        if self.isStarted and self.status != "Running":
+        # Auto-start monitoring if isStarted=True and licensed
+        if self.isStarted and self.isLicensed and self.status != "Running":
             logging.info("isStarted=True, starting monitoring immediately")
             self.start_monitoring()
 
@@ -153,42 +163,137 @@ class App:
         default_config = {
             "nsfw_threshold": 0.01,
             "close_tab_action": ["Ctrl", "w"],
-            "isStarted": False
+            "isStarted": False,
+            "license_key": "",
+            "last_validated": 0
         }
         try:
             if self.config_path.exists():
                 with open(self.config_path, 'r') as f:
-                    config = json.load(f)
-                    NSFW_THRESHOLD = float(config.get("nsfw_threshold", default_config["nsfw_threshold"]))
-                    close_tab_action = config.get("close_tab_action", default_config["close_tab_action"])
-                    self.isStarted = config.get("isStarted", default_config["isStarted"])
+                    self.config = json.load(f)
+                    NSFW_THRESHOLD = float(self.config.get("nsfw_threshold", default_config["nsfw_threshold"]))
+                    close_tab_action = self.config.get("close_tab_action", default_config["close_tab_action"])
+                    self.isStarted = self.config.get("isStarted", default_config["isStarted"])
                     set_close_tab_action(close_tab_action)
-                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
+                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={self.config.get('close_tab_action')}, isStarted={self.isStarted}")
             else:
                 logging.info("Config file not found, creating with defaults")
-                self.isStarted = default_config["isStarted"]
+                self.config = default_config
+                self.isStarted = False
                 NSFW_THRESHOLD = default_config["nsfw_threshold"]
                 set_close_tab_action(default_config["close_tab_action"])
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                self.save_config(NSFW_THRESHOLD, default_config["close_tab_action"], False)
         except Exception as e:
             logging.error(f"Error loading config from {self.config_path}: {e}, using defaults")
-            self.isStarted = default_config["isStarted"]
+            self.config = default_config
+            self.isStarted = False
             NSFW_THRESHOLD = default_config["nsfw_threshold"]
-            set_close_tab_action(default_config["close_tab_action"])
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.save_config(NSFW_THRESHOLD, default_config["close_tab_action"], False)
 
-    def save_config(self, threshold: float, close_tab_action: list, is_started: bool) -> None:
+    def load_license(self) -> None:
+        self.isLicensed = False
         try:
-            config = {
+            license_key = self.config.get("license_key", "")
+            if license_key:
+                self.isLicensed = self.validate_license_key(license_key)
+                logging.info(f"License validation: {'valid' if self.isLicensed else 'invalid'}")
+        except Exception as e:
+            logging.error(f"Error loading license: {e}")
+
+    def validate_license_key(self, key: str) -> bool:
+        device_id = hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()
+        try:
+            response = requests.post(
+                "https://www.automnex.com/api/validate",
+                json={"key": key, "device_id": device_id},
+                timeout=5
+            )
+            if response.status_code == 200 and response.json().get("valid", False):
+                self.config["last_validated"] = time.time()
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                return True
+            return False
+        except Exception as e:
+            logging.error(f"License server unreachable: {e}")
+            # Allow offline use for 7 days
+            last_validated = self.config.get("last_validated", 0)
+            return (time.time() - last_validated) < (7 * 24 * 3600)
+
+    def save_config(self, threshold: float, close_tab_action: list, is_started: bool, license_key: str = None) -> None:
+        try:
+            self.config = {
                 "nsfw_threshold": float(threshold),
                 "close_tab_action": close_tab_action,
-                "isStarted": bool(is_started)
+                "isStarted": bool(is_started),
+                "license_key": license_key or self.config.get("license_key", ""),
+                "last_validated": self.config.get("last_validated", time.time() if license_key else 0)
             }
             with open(self.config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-            logging.info(f"Saved config to {self.config_path}: {config}")
+                json.dump(self.config, f, indent=2)
+            logging.info(f"Saved config to {self.config_path}: {self.config}")
         except Exception as e:
             logging.error(f"Error saving config to {self.config_path}: {e}")
+
+    def show_license_dialog(self) -> None:
+        self.license_dialog = ctk.CTkToplevel()
+        self.license_dialog.title("ShieldSight License")
+        self.license_dialog.geometry("400x200")
+        self.license_dialog.resizable(False, False)
+        logging.info("License dialog created")
+
+        # Center layout
+        self.license_dialog.grid_rowconfigure((0, 1, 2), weight=1)
+        self.license_dialog.grid_columnconfigure((0, 1), weight=1)
+
+        # Label
+        ctk.CTkLabel(
+            self.license_dialog, text="Enter License Key:", font=ctk.CTkFont("Segoe UI", 14)
+        ).grid(row=0, column=0, padx=5, pady=10, sticky="w")
+
+        # Entry
+        self.license_entry = ctk.CTkEntry(self.license_dialog, width=200)
+        self.license_entry.grid(row=0, column=1, padx=5, pady=10)
+
+        # Activate Button
+        ctk.CTkButton(
+            self.license_dialog, text="Activate", command=self.activate_license,
+            font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
+        ).grid(row=1, column=0, columnspan=2, pady=10)
+
+        # Error Label
+        self.license_error_label = ctk.CTkLabel(
+            self.license_dialog, text="", font=ctk.CTkFont("Segoe UI", 12), text_color="red"
+        )
+        self.license_error_label.grid(row=2, column=0, columnspan=2)
+
+        # Allow closing dialog to exit app
+        self.license_dialog.protocol("WM_DELETE_WINDOW", self.exit_app_from_dialog)
+
+        # Force dialog to top
+        self.license_dialog.lift()
+        self.license_dialog.focus_force()
+        self.license_dialog.update()
+        logging.info("License dialog lifted and focused")
+
+    def exit_app_from_dialog(self) -> None:
+        logging.info("Exiting app from license dialog")
+        if hasattr(self, 'license_dialog'):
+            self.license_dialog.destroy()
+        self.root.destroy()
+        sys.exit(0)
+
+    def activate_license(self) -> None:
+        key = self.license_entry.get().strip()
+        if self.validate_license_key(key):
+            self.isLicensed = True
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, key)
+            self.license_dialog.destroy()
+            logging.info("License activated successfully")
+            # Re-run __init__ to setup main window
+            self.__init__(self.root)
+        else:
+            self.license_error_label.configure(text="Invalid or Expired Key")
+            logging.info("Invalid license key entered")
 
     def setup_tray(self) -> None:
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -201,6 +306,7 @@ class App:
         self.icon = pystray.Icon("ShieldSight", image, "ShieldSight", menu)
         self.icon_thread = threading.Thread(target=self.icon.run, daemon=True)
         self.icon_thread.start()
+        logging.info("System tray initialized")
 
     def update_tray_status(self) -> None:
         if hasattr(self, 'icon') and self.icon:
