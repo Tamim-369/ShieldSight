@@ -4,7 +4,7 @@ import sys
 import os
 import json
 from monitor import main, stop_monitoring, load_model, loading_complete, loading_error, set_nsfw_threshold, NSFW_THRESHOLD
-from utils import setup_auto_start, check_existing_process, get_close_tab_action, set_close_tab_action
+from utils import setup_auto_start, check_existing_process, get_close_tab_action, set_close_tab_action, create_lock_file, remove_lock_file
 import pystray
 from pystray import Menu, MenuItem
 from PIL import Image, ImageTk
@@ -67,7 +67,7 @@ class App:
         self.config_path = self.config_dir / "config.json"
         self.load_config()
 
-        # Show window only on first run
+        # Show window only on first run (isStarted=False and not background)
         if not self.isStarted and not getattr(sys, 'background', False):
             self.root.deiconify()
             self.root.update()
@@ -143,10 +143,10 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
 
-        # Auto-start monitoring if in background mode and previously started
-        if getattr(sys, 'background', False) and self.isStarted:
+        # Auto-start monitoring if isStarted=True
+        if self.isStarted:
             if not check_existing_process():
-                logging.info("Starting monitoring in background mode")
+                logging.info("isStarted=True, starting monitoring immediately")
                 self.start_monitoring()
             else:
                 self.status = "Running"
@@ -247,6 +247,7 @@ class App:
         if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
         self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)
+        remove_lock_file()
         if hasattr(self, 'icon'):
             self.icon.stop()
         self.root.destroy()
@@ -316,6 +317,7 @@ class App:
             logging.info("Monitoring already running, skipping start")
             return
 
+        create_lock_file()
         self.status = "Starting"
         self.status_label.configure(text=f"Status: {self.status}")
         self.start_stop_button.configure(state="disabled")
@@ -351,11 +353,12 @@ class App:
             if self.run_in_background.get():
                 setup_auto_start(True, self.script_path)
                 if self.is_visible:
-                    self.toggle_window()  # Hide window after start
+                    self.toggle_window()
             self.isStarted = True
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def handle_model_error(self, error_msg: str) -> None:
+        remove_lock_file()
         self.status = "Stopped"
         self.status_label.configure(text=f"Status: {self.status}")
         self.loader_label.configure(text=f"Error: {error_msg}", text_color="red")
@@ -369,6 +372,7 @@ class App:
             if self.running_thread and self.running_thread.is_alive():
                 self.running_thread.join(timeout=2)
             self.running_thread = None
+            remove_lock_file()
             self.status = "Stopped"
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start", state="normal")

@@ -34,3 +34,20 @@ def check_existing_process() -> bool:
     except Exception as e:
         logging.error(f"Error checking existing process: {e}")
         return False
+
+def create_lock_file() -> None:
+    try:
+        lock_file = Path.home() / ".shieldsight" / "lock"
+        lock_file.touch()
+        logging.info(f"Created lock file at {lock_file}")
+    except Exception as e:
+        logging.error(f"Error creating lock file: {e}")
+
+def remove_lock_file() -> None:
+    try:
+        lock_file = Path.home() / ".shieldsight" / "lock"
+        if lock_file.exists():
+            lock_file.unlink()
+            logging.info(f"Removed lock file at {lock_file}")
+    except Exception as e:
+        logging.error(f"Error removing lock file: {e}")
