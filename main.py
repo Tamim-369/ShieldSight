@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 import platform
 import time
 import argparse
+from pathlib import Path
 
 # Set appearance and theme
 ctk.set_appearance_mode("dark")
@@ -41,16 +42,19 @@ class App:
         self.running_thread = None
         self.run_in_background = ctk.BooleanVar(value=True)
         self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if getattr(sys, 'frozen', False) else sys.argv[0])
-        self.is_visible = True
+        self.is_visible = False  # Start hidden by default
         self.status = "Stopped"
         self.loading_progress = 0
         self.loading_in_progress = False
         self.model_loaded_once = False
         self.loader_frames = ["|", "/", "-", "\\"]  # Text-based spinner
         self.loader_index = 0
+        self.temperature = ctk.DoubleVar(value=0.5)  # Default temperature setting
 
-        # Load saved threshold, close tab action, and isStarted from config
-        self.config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        # Create .shieldsight directory and config path
+        self.config_dir = Path.home() / ".shieldsight"
+        self.config_dir.mkdir(exist_ok=True)
+        self.config_path = self.config_dir / "config.json"
         self.load_config()
 
         # Center layout config
@@ -72,7 +76,7 @@ class App:
             border_color="#3a3a3a"
         )
         self.box_frame.grid(row=0, column=0, sticky="nsew", padx=40, pady=40)
-        self.box_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=0)  # Added row 6 for potential error
+        self.box_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0)  # Added row for temperature
         self.box_frame.grid_columnconfigure((0, 1), weight=1)
 
         # Title Label
@@ -125,6 +129,24 @@ class App:
         )
         self.background_check.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
+        # Temperature Slider
+        self.temp_label = ctk.CTkLabel(
+            self.box_frame,
+            text="Temperature (0-1):",
+            font=ctk.CTkFont("Segoe UI", 14),
+            text_color="white"
+        )
+        self.temp_label.grid(row=5, column=0, pady=10, padx=10, sticky="w")
+        self.temp_slider = ctk.CTkSlider(
+            self.box_frame,
+            variable=self.temperature,
+            from_=0.0,
+            to=1.0,
+            number_of_steps=100,
+            command=self.update_temperature
+        )
+        self.temp_slider.grid(row=5, column=1, pady=10, padx=10, sticky="ew")
+
         # Footer
         self.footer = ctk.CTkLabel(
             self.box_frame,
@@ -132,7 +154,7 @@ class App:
             font=ctk.CTkFont("Segoe UI", 10),
             text_color="#888"
         )
-        self.footer.grid(row=5, column=0, columnspan=2, pady=(15, 5), padx=10, sticky="n")
+        self.footer.grid(row=6, column=0, columnspan=2, pady=(15, 5), padx=10, sticky="n")
 
         # Settings Icon
         self.settings_button = ctk.CTkButton(
@@ -153,7 +175,7 @@ class App:
         self.setup_tray()
         self.check_existing_process()
 
-        # Auto-start if in background mode and was started
+        # Auto-start and hide window if configured to run in background
         if getattr(sys, 'background', False) and self.isStarted:
             self.hide_window(None, None)
             if not self.running_thread or not self.running_thread.is_alive():
@@ -168,26 +190,30 @@ class App:
                     NSFW_THRESHOLD = float(config.get("nsfw_threshold", 0.01))
                     close_tab_action = config.get("close_tab_action", ["Ctrl", "w"])
                     self.isStarted = config.get("isStarted", False)
+                    self.temperature.set(float(config.get("temperature", 0.5)))
                     set_close_tab_action(close_tab_action)
-                    print(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
+                    print(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}, temperature={self.temperature.get()}")
             else:
                 self.isStarted = False
                 NSFW_THRESHOLD = 0.01
                 set_close_tab_action(["Ctrl", "w"])
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                self.temperature.set(0.5)
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
         except Exception as e:
             print(f"Error loading config: {e}, using defaults")
             self.isStarted = False
             NSFW_THRESHOLD = 0.01
             set_close_tab_action(["Ctrl", "w"])
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.temperature.set(0.5)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
-    def save_config(self, threshold, close_tab_action, is_started):
+    def save_config(self, threshold, close_tab_action, is_started, temperature):
         try:
             config = {
                 "nsfw_threshold": float(threshold),
                 "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "w"],
-                "isStarted": bool(is_started)
+                "isStarted": bool(is_started),
+                "temperature": float(temperature)
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f)
@@ -195,13 +221,9 @@ class App:
         except Exception as e:
             print(f"Error saving config: {e}")
 
-    def load_state(self):
-        # No longer needed separately since state is in config
-        pass
-
-    def save_state(self):
-        # No longer needed separately since state is in config
-        pass
+    def update_temperature(self, value):
+        self.temperature.set(value)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -247,7 +269,7 @@ class App:
         stop_monitoring()
         if self.running_thread:
             self.running_thread.join(timeout=2)
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)  # Reset isStarted on exit
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False, self.temperature.get())  # Reset isStarted on exit
         self.icon.stop()
         self.root.destroy()
         sys.exit(0)
@@ -264,6 +286,7 @@ class App:
         settings_window.grid_rowconfigure(0, weight=1)
         settings_window.grid_rowconfigure(1, weight=1)
         settings_window.grid_rowconfigure(2, weight=1)
+        settings_window.grid_rowconfigure(3, weight=1)
         settings_window.grid_columnconfigure(0, weight=1)
         settings_window.grid_columnconfigure(1, weight=1)
 
@@ -300,20 +323,38 @@ class App:
         )
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
+        # Temperature Slider in Settings
+        temp_label = ctk.CTkLabel(
+            settings_window,
+            text="Temperature (0-1):",
+            font=ctk.CTkFont("Segoe UI", 14),
+            text_color="white"
+        )
+        temp_label.grid(row=2, column=0, pady=10, padx=10, sticky="w")
+        temp_slider = ctk.CTkSlider(
+            settings_window,
+            variable=self.temperature,
+            from_=0.0,
+            to=1.0,
+            number_of_steps=100
+        )
+        temp_slider.grid(row=2, column=1, pady=10, padx=10, sticky="ew")
+        temp_slider.set(self.temperature.get())  # Sync with current value
+
         # Save Button
         save_button = ctk.CTkButton(
             settings_window,
             text="Save",
-            command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), sensitivity_entry, action_entry, settings_window),
+            command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), sensitivity_entry, action_entry, settings_window, temp_slider.get()),
             width=100,
             height=30,
             font=ctk.CTkFont("Segoe UI", 12, weight="bold"),
             fg_color="#2e89ff",
             hover_color="#1e5fc1"
         )
-        save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+        save_button.grid(row=3, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str, sensitivity_str, sensitivity_entry, action_entry, window):
+    def save_action(self, action_str, sensitivity_str, sensitivity_entry, action_entry, window, temp_value):
         try:
             # Validate and save sensitivity threshold first
             threshold_updated = False
@@ -343,8 +384,12 @@ class App:
                 set_close_tab_action(["Ctrl", "w"])
                 action_entry.configure(placeholder_text="Ctrl+w")
 
-            # Save both to config
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            # Update and save temperature
+            self.temperature.set(temp_value)
+            self.update_temperature(temp_value)
+
+            # Save all to config
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
             window.destroy()
         except ValueError as e:
@@ -353,7 +398,7 @@ class App:
                 text=str(e),
                 font=ctk.CTkFont("Segoe UI", 12),
                 text_color="red"
-            ).grid(row=3, column=0, columnspan=2, pady=5)
+            ).grid(row=4, column=0, columnspan=2, pady=5)
             if "Threshold" not in str(e) and not threshold_updated:
                 set_nsfw_threshold(0.01)  # Reset only if action error and threshold not set
             if "Action" in str(e) and not action_updated:
@@ -392,7 +437,7 @@ class App:
                 if self.run_in_background.get():
                     setup_auto_start(True, self.script_path)
                 self.isStarted = True
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
         else:
             stop_monitoring()
             if self.running_thread:
@@ -402,7 +447,7 @@ class App:
             self.start_stop_button.configure(text="Start")
             self.check_existing_process()
             self.isStarted = False
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
     def show_progress_bar(self):
         self.loader_label.configure(text="Loading Model... |")
@@ -440,10 +485,10 @@ class App:
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start")
         setup_auto_start(self.run_in_background.get(), self.script_path)
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
     def on_closing(self):
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
         if self.run_in_background.get() and self.status == "Running":
             self.hide_window(None, None)
         else:
@@ -470,4 +515,11 @@ if __name__ == "__main__":
         if not app.running_thread or not app.running_thread.is_alive():
             app.toggle_monitoring()
     else:
-        app.root.mainloop()
+        # Mimic Eye Server restart prompt
+        if not os.path.exists(Path.home() / ".shieldsight" / "config.json"):
+            ctk.CTkLabel(root, text="Please restart your computer to complete the setup.", font=ctk.CTkFont("Segoe UI", 12)).grid(row=0, column=0, pady=20)
+            root.mainloop()
+        else:
+            app.hide_window(None, None)  # Hide on first run after setup
+            if not app.running_thread or not app.running_thread.is_alive():
+                app.toggle_monitoring()
