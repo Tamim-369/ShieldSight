@@ -13,6 +13,10 @@ import time
 import argparse
 from pathlib import Path
 import ctypes
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Set appearance and theme
 ctk.set_appearance_mode("dark")
@@ -42,9 +46,9 @@ class App:
                 photo = ImageTk.PhotoImage(icon_img.resize((16, 16), Image.Resampling.LANCZOS))
                 self.root.iconphoto(True, photo)
             except Exception as e:
-                print(f"Failed to set icon: {e}")
+                logging.error(f"Failed to set icon: {e}")
         else:
-            print(f"Icon file not found at: {icon_path}")
+            logging.warning(f"Icon file not found at: {icon_path}")
 
         self.running_thread = None
         self.run_in_background = ctk.BooleanVar(value=True)
@@ -156,13 +160,15 @@ class App:
                     close_tab_action = config.get("close_tab_action", default_config["close_tab_action"])
                     self.isStarted = config.get("isStarted", default_config["isStarted"])
                     set_close_tab_action(close_tab_action)
+                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
             else:
-                self.isStarted = False
+                logging.info("Config file not found, creating with defaults")
+                self.isStarted = default_config["isStarted"]
                 NSFW_THRESHOLD = default_config["nsfw_threshold"]
                 set_close_tab_action(default_config["close_tab_action"])
                 self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         except Exception as e:
-            print(f"Error loading config: {e}, using defaults")
+            logging.error(f"Error loading config from {self.config_path}: {e}, using defaults")
             self.isStarted = default_config["isStarted"]
             NSFW_THRESHOLD = default_config["nsfw_threshold"]
             set_close_tab_action(default_config["close_tab_action"])
@@ -177,8 +183,9 @@ class App:
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f, indent=2)
+            logging.info(f"Saved config to {self.config_path}: {config}")
         except Exception as e:
-            print(f"Error saving config: {e}")
+            logging.error(f"Error saving config to {self.config_path}: {e}")
 
     def setup_tray(self) -> None:
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -236,13 +243,15 @@ class App:
         # Close Tab Action
         action_label = ctk.CTkLabel(settings_window, text="Close Tab Action:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         action_label.grid(row=0, column=0, pady=10, padx=10, sticky="w")
-        action_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12), placeholder_text="+".join(get_close_tab_action()))
+        action_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12))
+        action_entry.insert(0, "+".join(get_close_tab_action()))
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
         # Sensitivity Threshold
         sensitivity_label = ctk.CTkLabel(settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
-        sensitivity_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12), placeholder_text=str(NSFW_THRESHOLD))
+        sensitivity_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12))
+        sensitivity_entry.insert(0, str(NSFW_THRESHOLD))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
         # Save Button
@@ -255,17 +264,27 @@ class App:
     def save_action(self, action_str: str, sensitivity_str: str, settings_window: ctk.CTkToplevel) -> None:
         try:
             global NSFW_THRESHOLD
-            if sensitivity_str:
+            # Update threshold if provided, otherwise keep current
+            threshold = NSFW_THRESHOLD
+            if sensitivity_str.strip():
                 threshold = float(sensitivity_str)
                 if not 0 <= threshold <= 1:
                     raise ValueError("Threshold must be between 0 and 1")
                 set_nsfw_threshold(threshold)
+                NSFW_THRESHOLD = threshold
+                logging.info(f"Updated NSFW_THRESHOLD to {threshold}")
+
+            # Update close tab action if provided, otherwise keep current
+            close_tab_action = get_close_tab_action()
             if action_str.strip():
                 keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
                 if not any(k.lower() in {"ctrl", "alt", "shift", "win", "cmd"} for k in keys) or not any(k.lower() not in {"ctrl", "alt", "shift", "win", "cmd"} for k in keys):
                     raise ValueError("Action must include a modifier and a key")
                 set_close_tab_action(keys)
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                close_tab_action = keys
+                logging.info(f"Updated close_tab_action to {keys}")
+
+            self.save_config(threshold, close_tab_action, self.isStarted)
             settings_window.destroy()
         except ValueError as e:
             error_label = ctk.CTkLabel(settings_window, text=str(e), font=ctk.CTkFont("Segoe UI", 12), text_color="red")
@@ -294,7 +313,7 @@ class App:
         if loading_error:
             self.handle_model_error(loading_error)
         else:
-            print(f"Model loaded in {elapsed_time:.2f} seconds")
+            logging.info(f"Model loaded in {elapsed_time:.2f} seconds")
             self.model_loaded_once = True
             self.running_thread = threading.Thread(target=main, daemon=True)
             self.running_thread.start()
