@@ -391,7 +391,9 @@ class App:
 
     def start_monitoring(self):
         if not self.running_thread:
-            load_model()  # Load model silently as before
+            print("Attempting to load model...")
+            load_model()  # Load model silently
+            print(f"Loading complete: {loading_complete}, Loading error: {loading_error}")
             if loading_complete or loading_error:
                 if not loading_error:
                     self.model_loaded_once = True
@@ -407,6 +409,9 @@ class App:
                     self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
                 else:
                     ctk.CTkLabel(self.box_frame, text=f"Error: {loading_error}", font=ctk.CTkFont("Segoe UI", 12), text_color="red").grid(row=3, column=0, columnspan=2, pady=10, padx=10)
+            else:
+                print("Model loading did not complete successfully, retrying...")
+                self.start_monitoring()  # Retry if loading fails
 
     def toggle_monitoring(self):
         if self.start_stop_button.cget("text") == "Start":
