@@ -4,7 +4,7 @@ import sys
 import os
 import json
 from monitor import main, stop_monitoring, load_model, loading_complete, loading_error, set_nsfw_threshold, NSFW_THRESHOLD
-from utils import setup_auto_start, check_existing_process, get_close_tab_action, set_close_tab_action, create_lock_file, remove_lock_file
+from utils import setup_auto_start, get_close_tab_action, set_close_tab_action
 import pystray
 from pystray import Menu, MenuItem
 from PIL import Image, ImageTk
@@ -76,7 +76,7 @@ class App:
         else:
             self.root.withdraw()
             self.is_visible = False
-            logging.info("Running in background mode, window hidden")
+            logging.info("isStarted=True or background mode, window hidden")
 
         # Center layout
         self.root.grid_rowconfigure(0, weight=1)
@@ -144,16 +144,9 @@ class App:
         self.setup_tray()
 
         # Auto-start monitoring if isStarted=True
-        if self.isStarted:
-            if not check_existing_process():
-                logging.info("isStarted=True, starting monitoring immediately")
-                self.start_monitoring()
-            else:
-                self.status = "Running"
-                self.status_label.configure(text=f"Status: {self.status}")
-                self.start_stop_button.configure(text="Stop")
-                self.update_tray_status()
-                logging.info("Existing process detected, updated status")
+        if self.isStarted and self.status != "Running":
+            logging.info("isStarted=True, starting monitoring immediately")
+            self.start_monitoring()
 
     def load_config(self) -> None:
         global NSFW_THRESHOLD
@@ -247,7 +240,6 @@ class App:
         if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
         self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)
-        remove_lock_file()
         if hasattr(self, 'icon'):
             self.icon.stop()
         self.root.destroy()
@@ -317,7 +309,6 @@ class App:
             logging.info("Monitoring already running, skipping start")
             return
 
-        create_lock_file()
         self.status = "Starting"
         self.status_label.configure(text=f"Status: {self.status}")
         self.start_stop_button.configure(state="disabled")
@@ -358,7 +349,6 @@ class App:
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def handle_model_error(self, error_msg: str) -> None:
-        remove_lock_file()
         self.status = "Stopped"
         self.status_label.configure(text=f"Status: {self.status}")
         self.loader_label.configure(text=f"Error: {error_msg}", text_color="red")
@@ -372,7 +362,6 @@ class App:
             if self.running_thread and self.running_thread.is_alive():
                 self.running_thread.join(timeout=2)
             self.running_thread = None
-            remove_lock_file()
             self.status = "Stopped"
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start", state="normal")
