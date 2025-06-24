@@ -158,13 +158,12 @@ class App:
         self.setup_tray()
         self.check_existing_process()
 
-        # Initial setup or background start
+        # Initial setup or automatic start
         if not os.path.exists(self.config_path):
             self.show_restart_prompt()
-        elif getattr(sys, 'background', False) and self.isStarted:
+        elif getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
             self.hide_window(None, None)
-            if not self.running_thread or not self.running_thread.is_alive():
-                self.toggle_monitoring()
+            self.toggle_monitoring()  # Auto-start monitoring after restart
 
     def load_config(self):
         global NSFW_THRESHOLD
@@ -451,6 +450,7 @@ class App:
                 self.loading_dialog.after(200, update_loader)
 
         def update_progress(value, message):
+            print(f"Progress: {value}, Message: {message}")  # Debug print
             if value == 0:
                 self.loading_dialog.after(200, update_loader)  # Start animation
             if value == 100:
