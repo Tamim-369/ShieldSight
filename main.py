@@ -143,7 +143,7 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
 
-        # Auto-start monitoring if in background mode
+        # Auto-start monitoring if in background mode and previously started
         if getattr(sys, 'background', False) and self.isStarted:
             if not check_existing_process():
                 logging.info("Starting monitoring in background mode")
@@ -160,7 +160,7 @@ class App:
         default_config = {
             "nsfw_threshold": 0.01,
             "close_tab_action": ["Ctrl", "w"],
-            "isStarted": True
+            "isStarted": False
         }
         try:
             if self.config_path.exists():
@@ -350,8 +350,8 @@ class App:
             self.update_tray_status()
             if self.run_in_background.get():
                 setup_auto_start(True, self.script_path)
-                if self.is_visible and getattr(sys, 'background', False):
-                    self.toggle_window()
+                if self.is_visible:
+                    self.toggle_window()  # Hide window after start
             self.isStarted = True
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 

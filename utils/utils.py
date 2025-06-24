@@ -2,6 +2,7 @@ import winreg
 import os
 import logging
 from pathlib import Path
+
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def setup_auto_start(enable: bool, script_path: str) -> None:
@@ -22,9 +23,8 @@ def setup_auto_start(enable: bool, script_path: str) -> None:
     except OSError as e:
         logging.error(f"Error setting up auto-start: {e}")
 
-def check_existing_process(script_path: str) -> bool:
+def check_existing_process() -> bool:
     try:
-        # Simple check: look for a lock file or Registry flag
         lock_file = Path.home() / ".shieldsight" / "lock"
         if lock_file.exists():
             logging.info(f"Lock file found at {lock_file}, assuming existing process")
