@@ -23,7 +23,7 @@ __publisher__ = "Automnex Team"
 __publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
 class App:
-    def __init__(self, root):
+    def __init__(self, root: ctk.CTk) -> None:
         self.root = root
         self.root.title(f"ShieldSight v{__version__}")
         self.root.geometry("600x400")
@@ -58,7 +58,7 @@ class App:
         self.config_path = self.config_dir / "config.json"
         self.load_config()
 
-        # Only hide window if not first run or background mode
+        # Show window on first run, hide if background mode and previously started
         if self.isStarted and getattr(sys, 'background', False):
             self.root.withdraw()
         else:
@@ -141,7 +141,7 @@ class App:
         if getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
             self.start_monitoring()
 
-    def load_config(self):
+    def load_config(self) -> None:
         global NSFW_THRESHOLD
         default_config = {
             "nsfw_threshold": 0.01,
@@ -168,7 +168,7 @@ class App:
             set_close_tab_action(default_config["close_tab_action"])
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
-    def save_config(self, threshold, close_tab_action, is_started):
+    def save_config(self, threshold: float, close_tab_action: list, is_started: bool) -> None:
         try:
             config = {
                 "nsfw_threshold": float(threshold),
@@ -180,7 +180,7 @@ class App:
         except Exception as e:
             print(f"Error saving config: {e}")
 
-    def setup_tray(self):
+    def setup_tray(self) -> None:
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         image = Image.open(icon_path).resize((16, 16), Image.Resampling.LANCZOS) if os.path.exists(icon_path) else Image.new("RGBA", (16, 16), (0, 0, 0, 0))
         menu = Menu(
@@ -192,7 +192,7 @@ class App:
         self.icon_thread = threading.Thread(target=self.icon.run, daemon=True)
         self.icon_thread.start()
 
-    def update_tray_status(self):
+    def update_tray_status(self) -> None:
         if hasattr(self, 'icon') and self.icon:
             self.icon.menu = Menu(
                 MenuItem("Toggle Window", self.toggle_window),
@@ -201,16 +201,16 @@ class App:
             )
             self.icon.update_menu()
 
-    def toggle_window(self, icon=None, item=None):
+    def toggle_window(self, icon=None, item=None) -> None:
         if self.is_visible:
             self.root.withdraw()
             self.is_visible = False
         else:
             self.root.deiconify()
             self.is_visible = True
-            self.root.lift()  # Bring window to front
+            self.root.lift()
 
-    def exit_app(self, icon=None, item=None):
+    def exit_app(self, icon=None, item=None) -> None:
         stop_monitoring()
         if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
@@ -220,16 +220,16 @@ class App:
         self.root.destroy()
         sys.exit(0)
 
-    def open_settings(self):
-        settings_window = ctk.CTkToplevel(self.root)
+    def open_settings(self) -> None:
+        settings_window: ctk.CTkToplevel = ctk.CTkToplevel(self.root)
         settings_window.title("Settings")
         settings_window.geometry("400x200")
         settings_window.transient(self.root)
         settings_window.grab_set()
 
-        settings_window.grid_rowconfigure(0, weight=1)
-        settings_window.grid_rowconfigure(1, weight=1)
-        settings_window.grid_rowconfigure(2, weight=1)
+        # Configure grid layout
+        for row in range(3):
+            settings_window.grid_rowconfigure(row, weight=1)
         settings_window.grid_columnconfigure(0, weight=1)
         settings_window.grid_columnconfigure(1, weight=1)
 
@@ -252,7 +252,7 @@ class App:
         )
         save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str, sensitivity_str, window):
+    def save_action(self, action_str: str, sensitivity_str: str, settings_window: ctk.CTkToplevel) -> None:
         try:
             global NSFW_THRESHOLD
             if sensitivity_str:
@@ -266,12 +266,12 @@ class App:
                     raise ValueError("Action must include a modifier and a key")
                 set_close_tab_action(keys)
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-            window.destroy()
+            settings_window.destroy()
         except ValueError as e:
             error_label = ctk.CTkLabel(settings_window, text=str(e), font=ctk.CTkFont("Segoe UI", 12), text_color="red")
             error_label.grid(row=3, column=0, columnspan=2, pady=5)
 
-    def start_monitoring(self):
+    def start_monitoring(self) -> None:
         if self.running_thread and self.running_thread.is_alive():
             return
 
@@ -281,40 +281,40 @@ class App:
 
         def load_model_thread():
             try:
+                start_time = time.time()
                 load_model()
-                self.root.after(0, self.handle_model_loaded)
+                elapsed_time = time.time() - start_time
+                self.root.after(0, lambda: self.handle_model_loaded(elapsed_time))
             except Exception as e:
                 self.root.after(0, lambda: self.handle_model_error(str(e)))
 
         threading.Thread(target=load_model_thread, daemon=True).start()
 
-    def handle_model_loaded(self):
+    def handle_model_loaded(self, elapsed_time: float) -> None:
         if loading_error:
             self.handle_model_error(loading_error)
-        elif loading_complete:
+        else:
+            print(f"Model loaded in {elapsed_time:.2f} seconds")
             self.model_loaded_once = True
             self.running_thread = threading.Thread(target=main, daemon=True)
             self.running_thread.start()
             self.status = "Running"
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Stop", state="normal")
-            self.loader_label.configure(text="")
+            self.loader_label.configure(text=f"Model loaded in {elapsed_time:.2f} seconds", text_color="green")
             self.update_tray_status()
             if self.run_in_background.get():
                 setup_auto_start(True, self.script_path)
                 self.toggle_window()
             self.isStarted = True
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-        else:
-            self.loader_label.configure(text="Model loading timed out", text_color="red")
-            self.start_stop_button.configure(state="normal")
 
-    def handle_model_error(self, error_msg):
+    def handle_model_error(self, error_msg: str) -> None:
         self.loader_label.configure(text=f"Error: {error_msg}", text_color="red")
         self.start_stop_button.configure(state="normal")
         self.update_tray_status()
 
-    def toggle_monitoring(self):
+    def toggle_monitoring(self) -> None:
         if self.status == "Stopped":
             self.start_monitoring()
         else:
@@ -330,14 +330,14 @@ class App:
             self.isStarted = False
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
-    def update_background(self):
+    def update_background(self) -> None:
         setup_auto_start(self.run_in_background.get(), self.script_path)
         if not self.run_in_background.get() and self.status == "Running":
             self.toggle_monitoring()
             self.toggle_window()
         self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
-    def on_closing(self):
+    def on_closing(self) -> None:
         if self.run_in_background.get() and self.status == "Running":
             self.toggle_window()
         else:
