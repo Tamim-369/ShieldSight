@@ -35,7 +35,7 @@ class App:
 
         # Hide window initially and sync state
         self.root.withdraw()
-        self.root.update()  # Ensure Tkinter processes withdraw
+        self.root.update()
 
         # Determine script path (handle PyInstaller)
         self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
@@ -59,7 +59,7 @@ class App:
         self.is_visible = False
         self.status = "Stopped"
         self.model_loaded_once = False
-        self.last_toggle_time = 0  # For debouncing
+        self.last_toggle_time = 0
 
         # Config setup
         self.config_dir = Path.home() / ".shieldsight"
@@ -67,7 +67,7 @@ class App:
         self.config_path = self.config_dir / "config.json"
         self.load_config()
 
-        # Show window only on first run (isStarted=False)
+        # Show window only on first run
         if not self.isStarted and not getattr(sys, 'background', False):
             self.root.deiconify()
             self.root.update()
@@ -143,23 +143,24 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
 
-        # Check for existing process and start monitoring
-        if check_existing_process(self.script_path):
-            self.status = "Running"
-            self.status_label.configure(text=f"Status: {self.status}")
-            self.start_stop_button.configure(text="Stop")
-            self.update_tray_status()
-            logging.info("Existing process detected, updated status to Running")
-        elif getattr(sys, 'background', False) and self.isStarted:
-            logging.info("No existing process, starting monitoring in background")
-            self.start_monitoring()
+        # Auto-start monitoring if in background mode
+        if getattr(sys, 'background', False) and self.isStarted:
+            if not check_existing_process():
+                logging.info("Starting monitoring in background mode")
+                self.start_monitoring()
+            else:
+                self.status = "Running"
+                self.status_label.configure(text=f"Status: {self.status}")
+                self.start_stop_button.configure(text="Stop")
+                self.update_tray_status()
+                logging.info("Existing process detected, updated status")
 
     def load_config(self) -> None:
         global NSFW_THRESHOLD
         default_config = {
             "nsfw_threshold": 0.01,
             "close_tab_action": ["Ctrl", "w"],
-            "isStarted": False
+            "isStarted": True
         }
         try:
             if self.config_path.exists():
@@ -311,8 +312,8 @@ class App:
             error_label.grid(row=3, column=0, columnspan=2, pady=5)
 
     def start_monitoring(self) -> None:
-        if self.running_thread and self.running_thread.is_alive():
-            logging.info("Monitoring thread already running, skipping start")
+        if self.status == "Running":
+            logging.info("Monitoring already running, skipping start")
             return
 
         self.status = "Starting"
@@ -331,7 +332,8 @@ class App:
             except Exception as e:
                 self.root.after(0, lambda: self.handle_model_error(str(e)))
 
-        threading.Thread(target=load_model_thread, daemon=True).start()
+        self.running_thread = threading.Thread(target=load_model_thread, daemon=True)
+        self.running_thread.start()
 
     def handle_model_loaded(self, elapsed_time: float) -> None:
         if loading_error:
