@@ -12,6 +12,7 @@ import platform
 import time
 import argparse
 from pathlib import Path
+import ctypes
 
 # Set appearance and theme
 ctk.set_appearance_mode("dark")
@@ -175,8 +176,10 @@ class App:
         self.setup_tray()
         self.check_existing_process()
 
-        # Auto-start and hide window if configured to run in background
-        if getattr(sys, 'background', False) and self.isStarted:
+        # Initial setup or background start
+        if not os.path.exists(self.config_path):
+            self.show_restart_prompt()
+        elif getattr(sys, 'background', False) and self.isStarted:
             self.hide_window(None, None)
             if not self.running_thread or not self.running_thread.is_alive():
                 self.toggle_monitoring()
@@ -224,6 +227,45 @@ class App:
     def update_temperature(self, value):
         self.temperature.set(value)
         self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
+
+    def show_loading_dialog(self):
+        loading_dialog = ctk.CTkToplevel(self.root)
+        loading_dialog.title("Loading Model")
+        loading_dialog.geometry("300x100")
+        loading_dialog.resizable(False, False)
+        loading_dialog.transient(self.root)
+        loading_dialog.grab_set()
+
+        label = ctk.CTkLabel(loading_dialog, text="Loading Model...", font=ctk.CTkFont("Segoe UI", 12))
+        label.pack(pady=20)
+
+        def update_loader():
+            if self.loading_in_progress:
+                self.loader_index = (self.loader_index + 1) % len(self.loader_frames)
+                label.configure(text=f"Loading Model... {self.loader_frames[self.loader_index]}")
+                loading_dialog.after(200, update_loader)
+
+        loading_dialog.after(200, update_loader)
+        return loading_dialog
+
+    def show_restart_prompt(self):
+        restart_dialog = ctk.CTkToplevel(self.root)
+        restart_dialog.title("Setup Required")
+        restart_dialog.geometry("300x150")
+        restart_dialog.resizable(False, False)
+        restart_dialog.transient(self.root)
+        restart_dialog.grab_set()
+
+        label = ctk.CTkLabel(restart_dialog, text="You need to restart your PC to run this app properly.", font=ctk.CTkFont("Segoe UI", 12))
+        label.pack(pady=20)
+
+        ok_button = ctk.CTkButton(restart_dialog, text="OK", command=lambda: [restart_dialog.destroy(), self.restart_pc()], font=ctk.CTkFont("Segoe UI", 12), fg_color="#2e89ff", hover_color="#1e5fc1")
+        ok_button.pack(pady=10)
+
+        self.root.mainloop()
+
+    def restart_pc(self):
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", "shutdown", "/r /t 0", None, 0)  # Restart immediately
 
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
@@ -426,6 +468,7 @@ class App:
             if not loading_complete and not self.loading_in_progress and not self.model_loaded_once:
                 self.loading_in_progress = True
                 self.start_stop_button.configure(state="disabled")  # Disable button
+                self.show_loading_dialog()
                 self.show_progress_bar()
             elif loading_complete or self.model_loaded_once:
                 self.running_thread = threading.Thread(target=main, daemon=True)
@@ -450,20 +493,18 @@ class App:
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.temperature.get())
 
     def show_progress_bar(self):
-        self.loader_label.configure(text="Loading Model... |")
-
         def update_loader():
             if self.loading_in_progress:
                 self.loader_index = (self.loader_index + 1) % len(self.loader_frames)
-                self.loader_label.configure(text=f"Loading Model... {self.loader_frames[self.loader_index]}")
-                self.root.after(200, update_loader)
+                self.loading_dialog_label.configure(text=f"Loading Model... {self.loader_frames[self.loader_index]}")
+                self.loading_dialog.after(200, update_loader)
 
         def update_progress(value, message):
             if value == 0:
-                self.root.after(200, update_loader)  # Start animation
+                self.loading_dialog.after(200, update_loader)  # Start animation
             if value == 100:
                 self.loading_in_progress = False
-                self.loader_label.configure(text="")  # Clear loader
+                self.loading_dialog.destroy()  # Dismiss dialog
                 if loading_error:
                     ctk.CTkLabel(self.box_frame, text=f"Error: {loading_error}", font=ctk.CTkFont("Segoe UI", 12), text_color="red").grid(row=3, column=0, columnspan=2, pady=10, padx=10)
                 else:
@@ -472,6 +513,8 @@ class App:
                     self.toggle_monitoring()
                 self.root.update()
 
+        self.loading_dialog = self.show_loading_dialog()
+        self.loading_dialog_label = self.loading_dialog.children["!label"]
         load_thread = threading.Thread(target=load_model, args=(update_progress,), daemon=True)
         load_thread.start()
 
@@ -515,11 +558,4 @@ if __name__ == "__main__":
         if not app.running_thread or not app.running_thread.is_alive():
             app.toggle_monitoring()
     else:
-        # Mimic Eye Server restart prompt
-        if not os.path.exists(Path.home() / ".shieldsight" / "config.json"):
-            ctk.CTkLabel(root, text="Please restart your computer to complete the setup.", font=ctk.CTkFont("Segoe UI", 12)).grid(row=0, column=0, pady=20)
-            root.mainloop()
-        else:
-            app.hide_window(None, None)  # Hide on first run after setup
-            if not app.running_thread or not app.running_thread.is_alive():
-                app.toggle_monitoring()
+        app.root.mainloop()
