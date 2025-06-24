@@ -46,11 +46,7 @@ class App:
         self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if getattr(sys, 'frozen', False) else sys.argv[0])
         self.is_visible = False
         self.status = "Stopped"
-        self.loading_progress = 0
-        self.loading_in_progress = False
         self.model_loaded_once = False
-        self.loader_frames = ["|", "/", "-", "\\"]  # Text-based spinner
-        self.loader_index = 0
 
         # Create .shieldsight directory and config path
         self.config_dir = Path.home() / ".shieldsight"
@@ -112,7 +108,7 @@ class App:
         )
         self.start_stop_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-        # Loader Label
+        # Loader Label (removed since no dialog)
         self.loader_label = ctk.CTkLabel(self.box_frame, text="", font=ctk.CTkFont("Segoe UI", 12))
         self.loader_label.grid(row=3, column=0, columnspan=2, pady=(0, 10), padx=10, sticky="n")
 
@@ -163,7 +159,7 @@ class App:
             self.show_restart_prompt()
         elif getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
             self.hide_window(None, None)
-            self.toggle_monitoring()  # Auto-start monitoring after restart
+            self.start_monitoring()  # Auto-start monitoring after restart
 
     def load_config(self):
         global NSFW_THRESHOLD
@@ -200,26 +196,6 @@ class App:
             print(f"Saved config: {config}")
         except Exception as e:
             print(f"Error saving config: {e}")
-
-    def show_loading_dialog(self):
-        loading_dialog = ctk.CTkToplevel()
-        loading_dialog.title("Loading Model")
-        loading_dialog.geometry("300x100")
-        loading_dialog.resizable(False, False)
-        loading_dialog.transient(self.root)
-        loading_dialog.grab_set()
-
-        label = ctk.CTkLabel(loading_dialog, text="Loading Model...", font=ctk.CTkFont("Segoe UI", 12))
-        label.pack(pady=20)
-
-        def update_loader():
-            if self.loading_in_progress:
-                self.loader_index = (self.loader_index + 1) % len(self.loader_frames)
-                label.configure(text=f"Loading Model... {self.loader_frames[self.loader_index]}")
-                loading_dialog.after(200, update_loader)
-
-        loading_dialog.after(200, update_loader)
-        return loading_dialog
 
     def show_restart_prompt(self):
         restart_dialog = ctk.CTkToplevel()
@@ -413,14 +389,30 @@ class App:
             self.start_stop_button.configure(text="Start", state="normal")
         self.update_tray_status()
 
+    def start_monitoring(self):
+        if not self.running_thread:
+            load_model()  # Load model silently as before
+            if loading_complete or loading_error:
+                if not loading_error:
+                    self.model_loaded_once = True
+                    self.running_thread = threading.Thread(target=main, daemon=True)
+                    self.running_thread.start()
+                    self.status = "Running"
+                    self.status_label.configure(text=f"Status: {self.status}")
+                    self.start_stop_button.configure(text="Stop")
+                    self.hide_window(None, None)
+                    if self.run_in_background.get():
+                        setup_auto_start(True, self.script_path)
+                    self.isStarted = True
+                    self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                else:
+                    ctk.CTkLabel(self.box_frame, text=f"Error: {loading_error}", font=ctk.CTkFont("Segoe UI", 12), text_color="red").grid(row=3, column=0, columnspan=2, pady=10, padx=10)
+
     def toggle_monitoring(self):
         if self.start_stop_button.cget("text") == "Start":
-            if not loading_complete and not self.loading_in_progress and not self.model_loaded_once:
-                self.loading_in_progress = True
-                self.start_stop_button.configure(state="disabled")  # Disable button
-                self.show_loading_dialog()
-                self.show_progress_bar()
-            elif loading_complete or self.model_loaded_once:
+            if not self.model_loaded_once:
+                self.start_monitoring()
+            elif self.model_loaded_once:
                 self.running_thread = threading.Thread(target=main, daemon=True)
                 self.running_thread.start()
                 self.status = "Running"
@@ -441,33 +433,6 @@ class App:
             self.check_existing_process()
             self.isStarted = False
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-
-    def show_progress_bar(self):
-        def update_loader():
-            if self.loading_in_progress:
-                self.loader_index = (self.loader_index + 1) % len(self.loader_frames)
-                self.loading_dialog_label.configure(text=f"Loading Model... {self.loader_frames[self.loader_index]}")
-                self.loading_dialog.after(200, update_loader)
-
-        def update_progress(value, message):
-            print(f"Progress: {value}, Message: {message}")  # Debug print
-            if value == 0:
-                self.loading_dialog.after(200, update_loader)  # Start animation
-            if value == 100:
-                self.loading_in_progress = False
-                self.loading_dialog.destroy()  # Dismiss dialog
-                if loading_error:
-                    ctk.CTkLabel(self.box_frame, text=f"Error: {loading_error}", font=ctk.CTkFont("Segoe UI", 12), text_color="red").grid(row=3, column=0, columnspan=2, pady=10, padx=10)
-                else:
-                    self.model_loaded_once = True
-                    self.start_stop_button.configure(state="normal")
-                    self.toggle_monitoring()
-                self.root.update()
-
-        self.loading_dialog = self.show_loading_dialog()
-        self.loading_dialog_label = self.loading_dialog.children["!label"]
-        load_thread = threading.Thread(target=load_model, args=(update_progress,), daemon=True)
-        load_thread.start()
 
     def update_background(self):
         if not self.run_in_background.get() and self.status == "Running":
@@ -507,6 +472,6 @@ if __name__ == "__main__":
     if args.background and app.isStarted:
         app.hide_window(None, None)
         if not app.running_thread or not app.running_thread.is_alive():
-            app.toggle_monitoring()
+            app.start_monitoring()
     else:
         app.root.mainloop()
