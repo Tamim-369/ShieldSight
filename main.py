@@ -25,6 +25,7 @@ __publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 class App:
     def __init__(self, root):
         self.root = root
+        self.root.withdraw()  # Hide main window by default
         self.root.title(f"ShieldSight v{__version__}")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
@@ -43,7 +44,7 @@ class App:
         self.running_thread = None
         self.run_in_background = ctk.BooleanVar(value=True)
         self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if getattr(sys, 'frozen', False) else sys.argv[0])
-        self.is_visible = False  # Start hidden by default
+        self.is_visible = False
         self.status = "Stopped"
         self.loading_progress = 0
         self.loading_in_progress = False
@@ -202,7 +203,7 @@ class App:
             print(f"Error saving config: {e}")
 
     def show_loading_dialog(self):
-        loading_dialog = ctk.CTkToplevel(self.root)
+        loading_dialog = ctk.CTkToplevel()
         loading_dialog.title("Loading Model")
         loading_dialog.geometry("300x100")
         loading_dialog.resizable(False, False)
@@ -222,7 +223,7 @@ class App:
         return loading_dialog
 
     def show_restart_prompt(self):
-        restart_dialog = ctk.CTkToplevel(self.root)
+        restart_dialog = ctk.CTkToplevel()
         restart_dialog.title("Setup Required")
         restart_dialog.geometry("300x150")
         restart_dialog.resizable(False, False)
@@ -235,7 +236,7 @@ class App:
         ok_button = ctk.CTkButton(restart_dialog, text="OK", command=lambda: [restart_dialog.destroy(), self.restart_pc()], font=ctk.CTkFont("Segoe UI", 12), fg_color="#2e89ff", hover_color="#1e5fc1")
         ok_button.pack(pady=10)
 
-        self.root.mainloop()
+        restart_dialog.mainloop()  # Use dialog's mainloop to block until closed
 
     def restart_pc(self):
         ctypes.windll.shell32.ShellExecuteW(None, "runas", "shutdown", "/r /t 0", None, 0)  # Restart immediately
