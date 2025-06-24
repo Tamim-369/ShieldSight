@@ -25,36 +25,47 @@ __publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.withdraw()  # Hide main window by default
         self.root.title(f"ShieldSight v{__version__}")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
+
+        # Determine script path (handle PyInstaller)
+        self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+
         # Set window icon
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
         if os.path.exists(icon_path):
             try:
-                self.root.wm_iconbitmap(icon_path)  # for .ico window icon
+                if platform.system() == "Windows":
+                    self.root.wm_iconbitmap(icon_path)
                 icon_img = Image.open(icon_path).convert("RGB")
                 photo = ImageTk.PhotoImage(icon_img.resize((16, 16), Image.Resampling.LANCZOS))
-                self.root.iconphoto(True, photo)  # taskbar + alt+tab icon
+                self.root.iconphoto(True, photo)
             except Exception as e:
                 print(f"Failed to set icon: {e}")
         else:
-            print(f"Icon file not found at: {icon_path}, skipping icon")
+            print(f"Icon file not found at: {icon_path}")
+
         self.running_thread = None
         self.run_in_background = ctk.BooleanVar(value=True)
-        self.script_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__)) + ('/main.exe' if getattr(sys, 'frozen', False) else sys.argv[0])
         self.is_visible = False
         self.status = "Stopped"
         self.model_loaded_once = False
 
-        # Create .shieldsight directory and config path
+        # Config setup
         self.config_dir = Path.home() / ".shieldsight"
         self.config_dir.mkdir(exist_ok=True)
         self.config_path = self.config_dir / "config.json"
         self.load_config()
 
-        # Center layout config
+        # Only hide window if not first run or background mode
+        if self.isStarted and getattr(sys, 'background', False):
+            self.root.withdraw()
+        else:
+            self.is_visible = True
+            self.root.deiconify()
+
+        # Center layout
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
@@ -64,216 +75,158 @@ class App:
         self.main_frame.grid_rowconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
-        # Beautiful box frame
+        # Box frame
         self.box_frame = ctk.CTkFrame(
-            self.main_frame,
-            fg_color="#1e1e1e",
-            corner_radius=20,
-            border_width=2,
-            border_color="#3a3a3a"
+            self.main_frame, fg_color="#1e1e1e", corner_radius=20, border_width=2, border_color="#3a3a3a"
         )
         self.box_frame.grid(row=0, column=0, sticky="nsew", padx=40, pady=40)
         self.box_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5), weight=0)
         self.box_frame.grid_columnconfigure((0, 1), weight=1)
 
-        # Title Label
+        # Title
         self.title_label = ctk.CTkLabel(
-            self.box_frame,
-            text=f"ShieldSight v{__version__}",
-            font=ctk.CTkFont("Segoe UI", 24, weight="bold"),
-            text_color="white"
+            self.box_frame, text=f"ShieldSight v{__version__}", font=ctk.CTkFont("Segoe UI", 24, weight="bold"), text_color="white"
         )
         self.title_label.grid(row=0, column=0, columnspan=2, pady=(10, 5), padx=10, sticky="n")
 
-        # Status Label
+        # Status
         self.status_label = ctk.CTkLabel(
-            self.box_frame,
-            text=f"Status: {self.status}",
-            font=ctk.CTkFont("Segoe UI", 14),
-            text_color="lightgray"
+            self.box_frame, text=f"Status: {self.status}", font=ctk.CTkFont("Segoe UI", 14), text_color="lightgray"
         )
         self.status_label.grid(row=1, column=0, columnspan=2, pady=(0, 10), padx=10, sticky="n")
 
         # Start/Stop Button
         self.start_stop_button = ctk.CTkButton(
-            self.box_frame,
-            text="Start",
-            command=self.toggle_monitoring,
-            width=220,
-            height=50,
-            font=ctk.CTkFont("Segoe UI", 18, weight="bold"),
-            corner_radius=12,
-            fg_color="#2e89ff",
-            hover_color="#1e5fc1"
+            self.box_frame, text="Start", command=self.toggle_monitoring, width=220, height=50,
+            font=ctk.CTkFont("Segoe UI", 18, weight="bold"), corner_radius=12, fg_color="#2e89ff", hover_color="#1e5fc1"
         )
         self.start_stop_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-        # Loader Label (removed since no dialog)
+        # Loader/Error Label
         self.loader_label = ctk.CTkLabel(self.box_frame, text="", font=ctk.CTkFont("Segoe UI", 12))
         self.loader_label.grid(row=3, column=0, columnspan=2, pady=(0, 10), padx=10, sticky="n")
 
         # Background checkbox
         self.background_check = ctk.CTkCheckBox(
-            self.box_frame,
-            text="Run in Background",
-            variable=self.run_in_background,
-            command=self.update_background,
-            font=ctk.CTkFont("Segoe UI", 12),
-            checkbox_height=22,
-            checkbox_width=22,
-            corner_radius=6,
-            border_width=2
+            self.box_frame, text="Run in Background", variable=self.run_in_background, command=self.update_background,
+            font=ctk.CTkFont("Segoe UI", 12), checkbox_height=22, checkbox_width=22, corner_radius=6, border_width=2
         )
         self.background_check.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
         # Footer
         self.footer = ctk.CTkLabel(
-            self.box_frame,
-            text="© 2025 ShieldSight",
-            font=ctk.CTkFont("Segoe UI", 10),
-            text_color="#888"
+            self.box_frame, text="© 2025 ShieldSight", font=ctk.CTkFont("Segoe UI", 10), text_color="#888"
         )
         self.footer.grid(row=5, column=0, columnspan=2, pady=(15, 5), padx=10, sticky="n")
 
-        # Settings Icon
+        # Settings Button
         self.settings_button = ctk.CTkButton(
-            self.box_frame,
-            text="⚙",
-            command=self.open_settings,
-            width=30,
-            height=30,
-            font=ctk.CTkFont("Segoe UI", 14),
-            fg_color="transparent",
-            hover_color="#3a3a3a",
-            corner_radius=15
+            self.box_frame, text="⚙", command=self.open_settings, width=30, height=30,
+            font=ctk.CTkFont("Segoe UI", 14), fg_color="transparent", hover_color="#3a3a3a", corner_radius=15
         )
         self.settings_button.grid(row=0, column=1, pady=(10, 5), padx=(0, 10), sticky="ne")
 
-        # Handle close
+        # Window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
-        self.check_existing_process()
 
-        # Initial setup or automatic start
-        if not os.path.exists(self.config_path):
-            self.show_restart_prompt()
-        elif getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
-            self.hide_window(None, None)
-            self.start_monitoring()  # Auto-start monitoring after restart
+        # Check for existing process
+        if check_existing_process(self.script_path):
+            self.status = "Running"
+            self.status_label.configure(text=f"Status: {self.status}")
+            self.start_stop_button.configure(text="Stop")
+            self.update_tray_status()
+
+        # Auto-start if in background mode
+        if getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
+            self.start_monitoring()
 
     def load_config(self):
         global NSFW_THRESHOLD
+        default_config = {
+            "nsfw_threshold": 0.01,
+            "close_tab_action": ["Ctrl", "w"],
+            "isStarted": False
+        }
         try:
-            if os.path.exists(self.config_path):
+            if self.config_path.exists():
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
-                    NSFW_THRESHOLD = float(config.get("nsfw_threshold", 0.01))
-                    close_tab_action = config.get("close_tab_action", ["Ctrl", "w"])
-                    self.isStarted = config.get("isStarted", False)
+                    NSFW_THRESHOLD = float(config.get("nsfw_threshold", default_config["nsfw_threshold"]))
+                    close_tab_action = config.get("close_tab_action", default_config["close_tab_action"])
+                    self.isStarted = config.get("isStarted", default_config["isStarted"])
                     set_close_tab_action(close_tab_action)
-                    print(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
             else:
                 self.isStarted = False
-                NSFW_THRESHOLD = 0.01
-                set_close_tab_action(["Ctrl", "w"])
+                NSFW_THRESHOLD = default_config["nsfw_threshold"]
+                set_close_tab_action(default_config["close_tab_action"])
                 self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         except Exception as e:
             print(f"Error loading config: {e}, using defaults")
-            self.isStarted = False
-            NSFW_THRESHOLD = 0.01
-            set_close_tab_action(["Ctrl", "w"])
+            self.isStarted = default_config["isStarted"]
+            NSFW_THRESHOLD = default_config["nsfw_threshold"]
+            set_close_tab_action(default_config["close_tab_action"])
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def save_config(self, threshold, close_tab_action, is_started):
         try:
             config = {
                 "nsfw_threshold": float(threshold),
-                "close_tab_action": close_tab_action if close_tab_action else ["Ctrl", "w"],
+                "close_tab_action": close_tab_action,
                 "isStarted": bool(is_started)
             }
             with open(self.config_path, 'w') as f:
-                json.dump(config, f)
-            print(f"Saved config: {config}")
+                json.dump(config, f, indent=2)
         except Exception as e:
             print(f"Error saving config: {e}")
 
-    def show_restart_prompt(self):
-        restart_dialog = ctk.CTkToplevel()
-        restart_dialog.title("Setup Required")
-        restart_dialog.geometry("300x150")
-        restart_dialog.resizable(False, False)
-        restart_dialog.transient(self.root)
-        restart_dialog.grab_set()
-
-        label = ctk.CTkLabel(restart_dialog, text="You need to restart your PC to run this app properly.", font=ctk.CTkFont("Segoe UI", 12))
-        label.pack(pady=20)
-
-        ok_button = ctk.CTkButton(restart_dialog, text="OK", command=lambda: [restart_dialog.destroy(), self.restart_pc()], font=ctk.CTkFont("Segoe UI", 12), fg_color="#2e89ff", hover_color="#1e5fc1")
-        ok_button.pack(pady=10)
-
-        restart_dialog.mainloop()  # Use dialog's mainloop to block until closed
-
-    def restart_pc(self):
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", "shutdown", "/r /t 0", None, 0)  # Restart immediately
-
     def setup_tray(self):
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "logo.ico")
-        if os.path.exists(icon_path):
-            image = Image.open(icon_path).resize((16, 16), Image.Resampling.LANCZOS)
-        else:
-            image = Image.new("RGBA", (16, 16), (0, 0, 0, 0))  # Fallback if icon missing
+        image = Image.open(icon_path).resize((16, 16), Image.Resampling.LANCZOS) if os.path.exists(icon_path) else Image.new("RGBA", (16, 16), (0, 0, 0, 0))
         menu = Menu(
-            MenuItem("Show", self.show_window),
-            MenuItem("Hide", self.hide_window),
+            MenuItem("Toggle Window", self.toggle_window),
             MenuItem("Exit", self.exit_app),
             MenuItem(f"Status: {self.status}", lambda icon, item: None, enabled=False)
         )
         self.icon = pystray.Icon("ShieldSight", image, "ShieldSight", menu)
-        def on_left_click(icon, data):
-            if not self.is_visible:
-                self.show_window(icon, None)
-        self.icon.on_click = on_left_click
         self.icon_thread = threading.Thread(target=self.icon.run, daemon=True)
         self.icon_thread.start()
 
     def update_tray_status(self):
         if hasattr(self, 'icon') and self.icon:
             self.icon.menu = Menu(
-                MenuItem("Show", self.show_window),
-                MenuItem("Hide", self.hide_window),
+                MenuItem("Toggle Window", self.toggle_window),
                 MenuItem("Exit", self.exit_app),
                 MenuItem(f"Status: {self.status}", lambda icon, item: None, enabled=False)
             )
             self.icon.update_menu()
 
-    def show_window(self, icon, item):
-        if not self.is_visible:
-            self.root.deiconify()
-            self.is_visible = True
-
-    def hide_window(self, icon, item):
+    def toggle_window(self, icon=None, item=None):
         if self.is_visible:
             self.root.withdraw()
             self.is_visible = False
+        else:
+            self.root.deiconify()
+            self.is_visible = True
+            self.root.lift()  # Bring window to front
 
-    def exit_app(self, icon, item):
+    def exit_app(self, icon=None, item=None):
         stop_monitoring()
-        if self.running_thread:
+        if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)  # Reset isStarted on exit
-        self.icon.stop()
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)
+        if hasattr(self, 'icon'):
+            self.icon.stop()
         self.root.destroy()
         sys.exit(0)
 
     def open_settings(self):
         settings_window = ctk.CTkToplevel(self.root)
         settings_window.title("Settings")
-        settings_window.geometry("400x200")  # Adjusted size
+        settings_window.geometry("400x200")
         settings_window.transient(self.root)
-        settings_window.update_idletasks()
         settings_window.grab_set()
 
-        # Configure window to be resizable
         settings_window.grid_rowconfigure(0, weight=1)
         settings_window.grid_rowconfigure(1, weight=1)
         settings_window.grid_rowconfigure(2, weight=1)
@@ -281,202 +234,123 @@ class App:
         settings_window.grid_columnconfigure(1, weight=1)
 
         # Close Tab Action
-        action_label = ctk.CTkLabel(
-            settings_window,
-            text="Close Tab Action:",
-            font=ctk.CTkFont("Segoe UI", 14),
-            text_color="white"
-        )
+        action_label = ctk.CTkLabel(settings_window, text="Close Tab Action:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         action_label.grid(row=0, column=0, pady=10, padx=10, sticky="w")
-
-        current_action = "+".join(get_close_tab_action())
-        action_entry = ctk.CTkEntry(
-            settings_window,
-            font=ctk.CTkFont("Segoe UI", 12),
-            placeholder_text=current_action
-        )
+        action_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12), placeholder_text="+".join(get_close_tab_action()))
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
         # Sensitivity Threshold
-        sensitivity_label = ctk.CTkLabel(
-            settings_window,
-            text="Sensitivity Threshold (0-1):",
-            font=ctk.CTkFont("Segoe UI", 14),
-            text_color="white"
-        )
+        sensitivity_label = ctk.CTkLabel(settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
-
-        sensitivity_entry = ctk.CTkEntry(
-            settings_window,
-            font=ctk.CTkFont("Segoe UI", 12),
-            placeholder_text=str(NSFW_THRESHOLD)  # Use current NSFW_THRESHOLD
-        )
+        sensitivity_entry = ctk.CTkEntry(settings_window, font=ctk.CTkFont("Segoe UI", 12), placeholder_text=str(NSFW_THRESHOLD))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
         # Save Button
         save_button = ctk.CTkButton(
-            settings_window,
-            text="Save",
-            command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), sensitivity_entry, action_entry, settings_window),
-            width=100,
-            height=30,
-            font=ctk.CTkFont("Segoe UI", 12, weight="bold"),
-            fg_color="#2e89ff",
-            hover_color="#1e5fc1"
+            settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), settings_window),
+            width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
         )
         save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str, sensitivity_str, sensitivity_entry, action_entry, window):
+    def save_action(self, action_str, sensitivity_str, window):
         try:
-            # Validate and save sensitivity threshold first
-            threshold_updated = False
+            global NSFW_THRESHOLD
             if sensitivity_str:
                 threshold = float(sensitivity_str)
                 if not 0 <= threshold <= 1:
                     raise ValueError("Threshold must be between 0 and 1")
-                set_nsfw_threshold(threshold)  # Update in program
-                threshold_updated = True
-            elif not threshold_updated:
-                set_nsfw_threshold(0.01)  # Default if empty
-
-            # Validate and save close tab action
-            action_updated = False
+                set_nsfw_threshold(threshold)
             if action_str.strip():
                 keys = [k.strip().lower() if k.lower() in ["ctrl", "alt", "shift"] else k.upper() for k in action_str.split("+")]
-                if not keys or any(not k for k in keys):
-                    raise ValueError("Invalid action format. Use format like 'Ctrl+Shift+Q' or 'Alt+F4'")
-                valid_modifiers = {"ctrl", "alt", "shift", "win", "cmd"}
-                valid_keys = {chr(i) for i in range(ord('a'), ord('z')+1)} | {str(i) for i in range(1, 13)} | {"f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "esc", "w", "q"}
-                if not any(k.lower() in valid_modifiers for k in keys) or not any(k.lower() not in valid_modifiers for k in keys):
-                    raise ValueError("Action must include at least one modifier (Ctrl, Alt, Shift) and one key (a-z, F1-F12, Esc, W, Q)")
+                if not any(k.lower() in {"ctrl", "alt", "shift", "win", "cmd"} for k in keys) or not any(k.lower() not in {"ctrl", "alt", "shift", "win", "cmd"} for k in keys):
+                    raise ValueError("Action must include a modifier and a key")
                 set_close_tab_action(keys)
-                action_entry.configure(placeholder_text=action_str)
-                action_updated = True
-            elif not action_updated:
-                set_close_tab_action(["Ctrl", "w"])
-                action_entry.configure(placeholder_text="Ctrl+w")
-
-            # Save all to config
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-
             window.destroy()
         except ValueError as e:
-            ctk.CTkLabel(
-                window,
-                text=str(e),
-                font=ctk.CTkFont("Segoe UI", 12),
-                text_color="red"
-            ).grid(row=3, column=0, columnspan=2, pady=5)
-            if "Threshold" not in str(e) and not threshold_updated:
-                set_nsfw_threshold(0.01)  # Reset only if action error and threshold not set
-            if "Action" in str(e) and not action_updated:
-                set_close_tab_action(["Ctrl", "w"])
-                action_entry.configure(placeholder_text="Ctrl+w")
+            error_label = ctk.CTkLabel(settings_window, text=str(e), font=ctk.CTkFont("Segoe UI", 12), text_color="red")
+            error_label.grid(row=3, column=0, columnspan=2, pady=5)
 
-    def check_existing_process(self):
-        if check_existing_process(self.script_path):
-            if getattr(self, 'running_thread', None) and self.running_thread.is_alive():
-                self.status = "Running"
-                self.status_label.configure(text=f"Status: {self.status}")
-                self.start_stop_button.configure(text="Stop", state="normal")
-            else:
-                self.status = "Stopped"
-                self.status_label.configure(text=f"Status: {self.status}")
-                self.start_stop_button.configure(text="Start", state="normal")
+    def start_monitoring(self):
+        if self.running_thread and self.running_thread.is_alive():
+            return
+
+        self.loader_label.configure(text="Loading model...", text_color="white")
+        self.start_stop_button.configure(state="disabled")
+        self.root.update()
+
+        def load_model_thread():
+            try:
+                load_model()
+                self.root.after(0, self.handle_model_loaded)
+            except Exception as e:
+                self.root.after(0, lambda: self.handle_model_error(str(e)))
+
+        threading.Thread(target=load_model_thread, daemon=True).start()
+
+    def handle_model_loaded(self):
+        if loading_error:
+            self.handle_model_error(loading_error)
+        elif loading_complete:
+            self.model_loaded_once = True
+            self.running_thread = threading.Thread(target=main, daemon=True)
+            self.running_thread.start()
+            self.status = "Running"
+            self.status_label.configure(text=f"Status: {self.status}")
+            self.start_stop_button.configure(text="Stop", state="normal")
+            self.loader_label.configure(text="")
+            self.update_tray_status()
+            if self.run_in_background.get():
+                setup_auto_start(True, self.script_path)
+                self.toggle_window()
+            self.isStarted = True
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         else:
+            self.loader_label.configure(text="Model loading timed out", text_color="red")
+            self.start_stop_button.configure(state="normal")
+
+    def handle_model_error(self, error_msg):
+        self.loader_label.configure(text=f"Error: {error_msg}", text_color="red")
+        self.start_stop_button.configure(state="normal")
+        self.update_tray_status()
+
+    def toggle_monitoring(self):
+        if self.status == "Stopped":
+            self.start_monitoring()
+        else:
+            stop_monitoring()
+            if self.running_thread and self.running_thread.is_alive():
+                self.running_thread.join(timeout=2)
+            self.running_thread = None
             self.status = "Stopped"
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Start", state="normal")
-        self.update_tray_status()
-
-    def start_monitoring(self):
-        if not self.running_thread:
-            print("Attempting to load model...")
-            load_model()  # Load model silently
-            print(f"Loading complete: {loading_complete}, Loading error: {loading_error}")
-            if loading_complete or loading_error:
-                if not loading_error:
-                    self.model_loaded_once = True
-                    self.running_thread = threading.Thread(target=main, daemon=True)
-                    self.running_thread.start()
-                    self.status = "Running"
-                    self.status_label.configure(text=f"Status: {self.status}")
-                    self.start_stop_button.configure(text="Stop")
-                    self.hide_window(None, None)
-                    if self.run_in_background.get():
-                        setup_auto_start(True, self.script_path)
-                    self.isStarted = True
-                    self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-                else:
-                    ctk.CTkLabel(self.box_frame, text=f"Error: {loading_error}", font=ctk.CTkFont("Segoe UI", 12), text_color="red").grid(row=3, column=0, columnspan=2, pady=10, padx=10)
-            else:
-                print("Model loading did not complete successfully, retrying...")
-                self.start_monitoring()  # Retry if loading fails
-
-    def toggle_monitoring(self):
-        if self.start_stop_button.cget("text") == "Start":
-            if not self.model_loaded_once:
-                self.start_monitoring()
-            elif self.model_loaded_once:
-                self.running_thread = threading.Thread(target=main, daemon=True)
-                self.running_thread.start()
-                self.status = "Running"
-                self.status_label.configure(text=f"Status: {self.status}")
-                self.start_stop_button.configure(text="Stop")
-                self.hide_window(None, None)
-                if self.run_in_background.get():
-                    setup_auto_start(True, self.script_path)
-                self.isStarted = True
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
-        else:
-            stop_monitoring()
-            if self.running_thread:
-                self.running_thread.join(timeout=2)
-            self.status = "Stopped"
-            self.status_label.configure(text=f"Status: {self.status}")
-            self.start_stop_button.configure(text="Start")
-            self.check_existing_process()
+            self.loader_label.configure(text="")
+            self.update_tray_status()
             self.isStarted = False
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def update_background(self):
-        if not self.run_in_background.get() and self.status == "Running":
-            self.hide_window(None, None)
-            stop_monitoring()
-            if self.running_thread:
-                self.running_thread.join(timeout=2)
-            self.status = "Stopped"
-            self.status_label.configure(text=f"Status: {self.status}")
-            self.start_stop_button.configure(text="Start")
         setup_auto_start(self.run_in_background.get(), self.script_path)
+        if not self.run_in_background.get() and self.status == "Running":
+            self.toggle_monitoring()
+            self.toggle_window()
         self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def on_closing(self):
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
         if self.run_in_background.get() and self.status == "Running":
-            self.hide_window(None, None)
+            self.toggle_window()
         else:
-            stop_monitoring()
-            if self.running_thread:
-                self.running_thread.join(timeout=2)
-            self.root.destroy()
-            sys.exit(0)
+            self.exit_app()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--background", action="store_true", help="Run in background mode")
     args = parser.parse_args()
 
-    # Set background flag for auto-start
     if args.background:
         setattr(sys, 'background', True)
 
     root = ctk.CTk()
     app = App(root)
-
-    if args.background and app.isStarted:
-        app.hide_window(None, None)
-        if not app.running_thread or not app.running_thread.is_alive():
-            app.start_monitoring()
-    else:
-        app.root.mainloop()
+    root.mainloop()
