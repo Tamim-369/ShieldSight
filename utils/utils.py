@@ -1,7 +1,8 @@
 import winreg
 import os
-import logging
 import psutil
+import logging
+import sys
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -14,13 +15,11 @@ def check_existing_process(script_path):
             continue
     return False
 
-
 def setup_auto_start(enable: bool, script_path: str) -> None:
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
         app_name = "ShieldSight"
         if enable:
-            # Include --background flag in the command
             command = f'"{script_path}" --background'
             winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, command)
             logging.info(f"Auto-start enabled with command: {command}")
@@ -33,3 +32,22 @@ def setup_auto_start(enable: bool, script_path: str) -> None:
         winreg.CloseKey(key)
     except OSError as e:
         logging.error(f"Error setting up auto-start: {e}")
+
+def check_existing_process(script_path: str) -> bool:
+    try:
+        current_pid = os.getpid()
+        script_name = os.path.basename(script_path).lower()
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.pid != current_pid and proc.name().lower() == script_name:
+                    cmdline = proc.cmdline()
+                    if cmdline and any(script_path.lower() in arg.lower() for arg in cmdline):
+                        logging.info(f"Found existing process: PID={proc.pid}, cmdline={cmdline}")
+                        return True
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                continue
+        logging.debug("No existing process found")
+        return False
+    except Exception as e:
+        logging.error(f"Error checking existing process: {e}")
+        return False

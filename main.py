@@ -143,15 +143,15 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_tray()
 
-        # Check for existing process
+        # Check for existing process and start monitoring
         if check_existing_process(self.script_path):
             self.status = "Running"
             self.status_label.configure(text=f"Status: {self.status}")
             self.start_stop_button.configure(text="Stop")
             self.update_tray_status()
-
-        # Auto-start monitoring if in background mode
-        if getattr(sys, 'background', False) and self.isStarted and not self.running_thread:
+            logging.info("Existing process detected, updated status to Running")
+        elif getattr(sys, 'background', False) and self.isStarted:
+            logging.info("No existing process, starting monitoring in background")
             self.start_monitoring()
 
     def load_config(self) -> None:
@@ -218,14 +218,12 @@ class App:
             self.icon.update_menu()
 
     def toggle_window(self, icon=None, item=None) -> None:
-        # Debounce toggle (prevent rapid clicks)
         current_time = time.time()
         if current_time - self.last_toggle_time < 0.5:
             logging.debug("Toggle debounced")
             return
         self.last_toggle_time = current_time
 
-        # Sync is_visible with actual window state
         actual_visible = self.root.winfo_viewable()
         if self.is_visible != actual_visible:
             logging.warning(f"State mismatch: is_visible={self.is_visible}, actual_visible={actual_visible}")
@@ -262,27 +260,23 @@ class App:
         self.settings_window.transient(self.root)
         self.settings_window.grab_set()
 
-        # Configure grid layout
         for row in range(3):
             self.settings_window.grid_rowconfigure(row, weight=1)
         self.settings_window.grid_columnconfigure(0, weight=1)
         self.settings_window.grid_columnconfigure(1, weight=1)
 
-        # Close Tab Action
         action_label = ctk.CTkLabel(self.settings_window, text="Close Tab Action:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         action_label.grid(row=0, column=0, pady=10, padx=10, sticky="w")
         action_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
         action_entry.insert(0, "+".join(get_close_tab_action()))
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
-        # Sensitivity Threshold
         sensitivity_label = ctk.CTkLabel(self.settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
         sensitivity_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
         sensitivity_entry.insert(0, str(NSFW_THRESHOLD))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
-        # Save Button
         save_button = ctk.CTkButton(
             self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), self.settings_window),
             width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
@@ -318,11 +312,15 @@ class App:
 
     def start_monitoring(self) -> None:
         if self.running_thread and self.running_thread.is_alive():
+            logging.info("Monitoring thread already running, skipping start")
             return
 
-        self.loader_label.configure(text="Loading model...", text_color="white")
+        self.status = "Starting"
+        self.status_label.configure(text=f"Status: {self.status}")
         self.start_stop_button.configure(state="disabled")
+        self.update_tray_status()
         self.root.update()
+        logging.info("Starting model loading and monitoring")
 
         def load_model_thread():
             try:
@@ -350,20 +348,21 @@ class App:
             self.update_tray_status()
             if self.run_in_background.get():
                 setup_auto_start(True, self.script_path)
-                if self.is_visible:
+                if self.is_visible and getattr(sys, 'background', False):
                     self.toggle_window()
             self.isStarted = True
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
 
     def handle_model_error(self, error_msg: str) -> None:
+        self.status = "Stopped"
+        self.status_label.configure(text=f"Status: {self.status}")
         self.loader_label.configure(text=f"Error: {error_msg}", text_color="red")
         self.start_stop_button.configure(state="normal")
         self.update_tray_status()
+        logging.error(f"Model loading error: {error_msg}")
 
     def toggle_monitoring(self) -> None:
-        if self.status == "Stopped":
-            self.start_monitoring()
-        else:
+        if self.status == "Running":
             stop_monitoring()
             if self.running_thread and self.running_thread.is_alive():
                 self.running_thread.join(timeout=2)
@@ -375,6 +374,9 @@ class App:
             self.update_tray_status()
             self.isStarted = False
             self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            logging.info("Monitoring stopped")
+        else:
+            self.start_monitoring()
 
     def update_background(self) -> None:
         setup_auto_start(self.run_in_background.get(), self.script_path)
