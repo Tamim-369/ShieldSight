@@ -27,12 +27,12 @@ __publisher__ = "Automnex Team"
 __publish_date__ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
 # Hard-coded expiration date: July 5, 2025
-EXPIRATION_DATE = int(datetime.datetime(2025, 6, 27).timestamp())
+EXPIRATION_DATE = int(datetime.datetime(2025, 7, 5).timestamp())
 
 class App:
     def __init__(self, root: ctk.CTk) -> None:
         self.root = root
-        self.root.title(f"Guard v{__version__}")
+        self.root.title(f"ShieldSight v{__version__}")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
 
@@ -49,7 +49,7 @@ class App:
         self.script_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
 
         # Config setup
-        self.config_dir = Path.home() / ".Guard"
+        self.config_dir = Path.home() / ".shieldsight"
         self.config_dir.mkdir(exist_ok=True)
         self.config_path = self.config_dir / "config.json"
         self.load_config()
@@ -106,7 +106,7 @@ class App:
 
         # Title
         self.title_label = ctk.CTkLabel(
-            self.box_frame, text=f"Guard v{__version__}", font=ctk.CTkFont("Segoe UI", 24, weight="bold"), text_color="white"
+            self.box_frame, text=f"ShieldSight v{__version__}", font=ctk.CTkFont("Segoe UI", 24, weight="bold"), text_color="white"
         )
         self.title_label.grid(row=0, column=0, columnspan=2, pady=(10, 5), padx=10, sticky="n")
 
@@ -136,7 +136,7 @@ class App:
 
         # Footer
         self.footer = ctk.CTkLabel(
-            self.box_frame, text="© 2025 Guard", font=ctk.CTkFont("Segoe UI", 10), text_color="#888"
+            self.box_frame, text="© 2025 ShieldSight", font=ctk.CTkFont("Segoe UI", 10), text_color="#888"
         )
         self.footer.grid(row=5, column=0, columnspan=2, pady=(15, 5), padx=10, sticky="n")
 
@@ -161,11 +161,11 @@ class App:
         if current_time > EXPIRATION_DATE:
             logging.info("Software has expired")
             dialog = ctk.CTkToplevel()
-            dialog.title("Guard Expired")
+            dialog.title("ShieldSight Expired")
             dialog.geometry("400x200")
             dialog.resizable(False, False)
             ctk.CTkLabel(
-                dialog, text="This version of Guard has expired on July 5, 2025.\nPlease contact Automnex for a new version.",
+                dialog, text="This version of ShieldSight has expired on July 5, 2025.\nPlease contact Automnex for a new version.",
                 font=ctk.CTkFont("Segoe UI", 14), text_color="red"
             ).grid(row=0, column=0, padx=20, pady=20)
             ctk.CTkButton(
@@ -235,7 +235,7 @@ class App:
             MenuItem("Exit", self.exit_app),
             MenuItem(f"Status: {self.status}", lambda icon, item: None, enabled=False)
         )
-        self.icon = pystray.Icon("Guard", image, "Guard", menu)
+        self.icon = pystray.Icon("ShieldSight", image, "ShieldSight", menu)
         self.icon_thread = threading.Thread(target=self.icon.run, daemon=True)
         self.icon_thread.start()
         logging.info("System tray initialized")
