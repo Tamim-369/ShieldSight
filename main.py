@@ -295,10 +295,10 @@ class App:
         action_entry.insert(0, "+".join(get_close_tab_action()))
         action_entry.grid(row=0, column=1, pady=10, padx=10, sticky="ew")
 
-        sensitivity_label = ctk.CTkLabel(self.settings_window, text="Sensitivity Threshold (0-1):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
+        sensitivity_label = ctk.CTkLabel(self.settings_window, text="Sensitivity Threshold (as %):", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
         sensitivity_label.grid(row=1, column=0, pady=10, padx=10, sticky="w")
         sensitivity_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
-        sensitivity_entry.insert(0, str(NSFW_THRESHOLD))
+        sensitivity_entry.insert(0, str(int(NSFW_THRESHOLD * 100)))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
         redirect_label = ctk.CTkLabel(self.settings_window, text="Motivational Redirect URL:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
@@ -341,9 +341,11 @@ class App:
             global NSFW_THRESHOLD
             threshold = NSFW_THRESHOLD
             if sensitivity_str.strip():
-                threshold = float(sensitivity_str)
-                if not 0 <= threshold <= 1:
-                    raise ValueError("Threshold must be between 0 and 1")
+                # Convert percent to float
+                threshold_percent = float(sensitivity_str)
+                if not 0 <= threshold_percent <= 100:
+                    raise ValueError("Threshold must be between 0 and 100")
+                threshold = threshold_percent / 100.0
                 set_nsfw_threshold(threshold)
                 NSFW_THRESHOLD = threshold
                 logging.info(f"Updated NSFW_THRESHOLD to {threshold}")

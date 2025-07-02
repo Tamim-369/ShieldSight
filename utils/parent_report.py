@@ -66,7 +66,16 @@ def generate_parent_report_pdf():
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Parent Mode Report", ln=True, align="C")
-    pdf.ln(10)
+    pdf.ln(5)
+    # Show threshold as percentage at the top
+    try:
+        from monitor.monitor import NSFW_THRESHOLD
+        threshold_percent = int(NSFW_THRESHOLD * 100)
+    except Exception:
+        threshold_percent = 0
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"Sensitivity Threshold: {threshold_percent}%", ln=True)
+    pdf.ln(5)
 
     pdf.set_font("Arial", size=12)
     for event in events:
@@ -81,10 +90,10 @@ def generate_parent_report_pdf():
         pdf.set_font("Arial", size=12)
         pdf.cell(0, 8, f"Date: {date_time_str}", ln=True)
         pdf.cell(0, 8, f"Content Type: adult", ln=True)
-        # Format NSFW score to two decimal places
+        # Format NSFW score to two decimal places and show as percent
         try:
             score_val = float(event['score'])
-            score_str = f"{score_val:.2f}"
+            score_str = f"{int(score_val * 100)}%"
         except Exception:
             score_str = str(event['score'])
         pdf.cell(0, 8, f"NSFW Score: {score_str}", ln=True)
