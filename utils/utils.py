@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 def setup_auto_start(enable: bool, script_path: str) -> None:
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
-        app_name = "ShieldSight"
+        app_name = "Guard"
         if enable:
             command = f'"{script_path}" --background'
             winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, command)

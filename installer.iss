@@ -1,10 +1,10 @@
 [Setup]
-AppName=ShieldSight
+AppName=Guard
 AppVersion=1.0
-DefaultDirName={commonpf}\ShieldSight
-DefaultGroupName=ShieldSight
+DefaultDirName={commonpf}\Guard
+DefaultGroupName=Guard
 OutputDir=C:\Users\Tanvir\Desktop\distructionOfDistraction\dist
-OutputBaseFilename=ShieldSightSetup
+OutputBaseFilename=GuardSetup
 SetupIconFile=assets\logo.ico
 Compression=lzma
 SolidCompression=yes
@@ -15,10 +15,10 @@ Source: "dist\main\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cre
 
 [Icons]
 ; Start Menu Shortcut
-Name: "{group}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
+Name: "{group}\Guard"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
 
 ; Optional: Desktop Shortcut
-Name: "{commondesktop}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
+Name: "{commondesktop}\Guard"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
 
 ; Optional: Launch on Boot
-Name: "{commonstartup}\ShieldSight"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
+Name: "{commonstartup}\Guard"; Filename: "{app}\main.exe"; IconFilename: "{app}\assets\logo.ico"; WorkingDir: "{app}"
