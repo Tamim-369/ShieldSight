@@ -88,7 +88,6 @@ def generate_parent_report_pdf():
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, date_time_str, ln=True)
         pdf.set_font("Arial", size=12)
-        pdf.cell(0, 8, f"Date: {date_time_str}", ln=True)
         pdf.cell(0, 8, f"Content Type: adult", ln=True)
         # Format NSFW score to two decimal places and show as percent
         try:
