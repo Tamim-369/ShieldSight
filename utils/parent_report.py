@@ -81,7 +81,13 @@ def generate_parent_report_pdf():
         pdf.set_font("Arial", size=12)
         pdf.cell(0, 8, f"Date: {date_time_str}", ln=True)
         pdf.cell(0, 8, f"Content Type: {event.get('content_type', 'NSFW')}", ln=True)
-        pdf.cell(0, 8, f"NSFW Score: {event['score']}", ln=True)
+        score_val = event['score']
+        try:
+            score_val = float(score_val)
+            score_str = f"{score_val:.2f}"
+        except Exception:
+            score_str = str(score_val)
+        pdf.cell(0, 8, f"NSFW Score: {score_str}", ln=True)
         screenshot_path = str(screenshot_dir / event['screenshot'])
         file_url = f"file://{screenshot_path}"
         # Add clickable link for screenshot
