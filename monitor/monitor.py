@@ -1,3 +1,4 @@
+
 import mss
 import cv2
 import numpy as np
@@ -26,7 +27,7 @@ loading_complete = False
 loading_error = None
 model_lock = threading.Lock()
 loading_start_time = None
-NSFW_THRESHOLD = 0.01  # Default threshold
+NSFW_THRESHOLD = 0.5  # Default threshold
 MOTIVATIONAL_URL = "https://www.youtube.com/shorts/8SVZLF75P2M"
 ENABLE_REDIRECT = True
 
