@@ -27,7 +27,7 @@ loading_error = None
 model_lock = threading.Lock()
 loading_start_time = None
 NSFW_THRESHOLD = 0.01  # Default threshold
-MOTIVATIONAL_URL = "https://www.youtube.com/shorts/aq8lM9HMe4E"
+MOTIVATIONAL_URL = "https://www.youtube.com/shorts/8SVZLF75P2M"
 ENABLE_REDIRECT = True
 
 def set_nsfw_threshold(threshold):
