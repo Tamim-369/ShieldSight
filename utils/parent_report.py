@@ -73,22 +73,20 @@ def generate_parent_report_pdf():
         # Format time as HH:MM:SS for the event title
         try:
             dt = datetime.strptime(event['timestamp'], "%Y-%m-%d_%H-%M-%S")
-            time_str = dt.strftime("%H:%M:%S")
-            date_str = dt.strftime("%Y-%m-%d")
+            date_time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
-            time_str = event['timestamp']
-            date_str = event['timestamp']
+            date_time_str = event['timestamp']
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, time_str, ln=True)
+        pdf.cell(0, 10, date_time_str, ln=True)
         pdf.set_font("Arial", size=12)
-        pdf.cell(0, 8, f"Date: {date_str}", ln=True)
+        pdf.cell(0, 8, f"Date: {date_time_str}", ln=True)
         pdf.cell(0, 8, f"Content Type: {event.get('content_type', 'NSFW')}", ln=True)
         pdf.cell(0, 8, f"NSFW Score: {event['score']}", ln=True)
         screenshot_path = str(screenshot_dir / event['screenshot'])
         file_url = f"file://{screenshot_path}"
         # Add clickable link for screenshot
         pdf.set_text_color(0, 0, 255)
-        pdf.cell(0, 8, f"Screenshot: {screenshot_path}", ln=True, link=file_url)
+        pdf.cell(0, 8, "Open Screenshot in Browser", ln=True, link=file_url)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(5)
 
