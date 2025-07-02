@@ -316,6 +316,8 @@ class App:
         parent_mode_check.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="w")
 
         def on_get_report():
+            # Stop monitoring before generating the report
+            self.toggle_monitoring()  # This will stop if running, start if stopped
             # Prompt for password
             import tkinter.simpledialog
             pw = tkinter.simpledialog.askstring("Parent Password", "Enter parent password:", show='*', parent=self.settings_window)
