@@ -35,6 +35,7 @@ ENABLE_REDIRECT = True
 PARENT_MODE = False
 PARENT_REPORT_PATH = None
 PARENT_SCREENSHOT_DIR = None
+monitoring_active = True
 
 def set_nsfw_threshold(threshold):
     global NSFW_THRESHOLD
@@ -155,9 +156,10 @@ def speak_alert(content_type, score):
             webbrowser.open_new_tab(MOTIVATIONAL_URL)
 
 def main():
-    global classifier, loading_complete
+    global classifier, loading_complete, monitoring_active
+    monitoring_active = True
     print("Starting screen monitoring for adult content...")
-    while True:
+    while monitoring_active:
         if not classifier:
             print("Model not loaded yet.")
             time.sleep(1)
@@ -169,4 +171,6 @@ def main():
         time.sleep(1)
 
 def stop_monitoring():
+    global monitoring_active
     print("Stopping monitoring...")
+    monitoring_active = False
