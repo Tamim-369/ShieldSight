@@ -69,15 +69,27 @@ def generate_parent_report_pdf():
     pdf.ln(10)
 
     pdf.set_font("Arial", size=12)
-    for idx, event in enumerate(events):
+    for event in events:
+        # Format time as HH:MM:SS for the event title
+        try:
+            dt = datetime.strptime(event['timestamp'], "%Y-%m-%d_%H-%M-%S")
+            time_str = dt.strftime("%H:%M:%S")
+            date_str = dt.strftime("%Y-%m-%d")
+        except Exception:
+            time_str = event['timestamp']
+            date_str = event['timestamp']
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, f"Event {idx+1}", ln=True)
+        pdf.cell(0, 10, time_str, ln=True)
         pdf.set_font("Arial", size=12)
-        pdf.cell(0, 8, f"Date/Time: {event['timestamp']}", ln=True)
+        pdf.cell(0, 8, f"Date: {date_str}", ln=True)
         pdf.cell(0, 8, f"Content Type: {event.get('content_type', 'NSFW')}", ln=True)
         pdf.cell(0, 8, f"NSFW Score: {event['score']}", ln=True)
         screenshot_path = str(screenshot_dir / event['screenshot'])
-        pdf.cell(0, 8, f"Screenshot: {screenshot_path}", ln=True)
+        file_url = f"file://{screenshot_path}"
+        # Add clickable link for screenshot
+        pdf.set_text_color(0, 0, 255)
+        pdf.cell(0, 8, f"Screenshot: {screenshot_path}", ln=True, link=file_url)
+        pdf.set_text_color(0, 0, 0)
         pdf.ln(5)
 
     pdf.output(str(pdf_path))
