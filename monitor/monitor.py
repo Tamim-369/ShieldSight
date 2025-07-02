@@ -110,10 +110,6 @@ def capture_screen():
 def speak_alert(content_type, score):
     message = f"Warning: Detected {content_type} with confidence {score:.2f}. Please review the content."
     print(message)
-    hotkey(*get_close_tab_action())
-    time.sleep(0.1)
-    # engine.say(message)
-    # engine.runAndWait()
     if PARENT_MODE:
         try:
             # Ensure screenshot dir exists
@@ -148,6 +144,10 @@ def speak_alert(content_type, score):
                         json.dump(report, f, indent=2)
         except Exception as e:
             print(f"Parent mode logging failed: {e}")
+    hotkey(*get_close_tab_action())
+    time.sleep(0.1)
+    # engine.say(message)
+    # engine.runAndWait()
     if ENABLE_REDIRECT and MOTIVATIONAL_URL:
         try:
             webbrowser.get("chrome").open_new_tab(MOTIVATIONAL_URL)
