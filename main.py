@@ -339,7 +339,7 @@ class App:
         get_report_button = ctk.CTkButton(self.settings_window, text="Get Report", command=on_get_report, width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1")
         if self.parent_mode:
             get_report_button.grid(row=5, column=0, columnspan=2, pady=10, padx=10, sticky="n")
-            # Add info text below the button
+            # Move info text to row 6, save button to row 7
             info_label = ctk.CTkLabel(self.settings_window, text="Tip: Make sure to press Stop before viewing the report to see the images properly.", font=ctk.CTkFont("Segoe UI", 10), text_color="yellow")
             info_label.grid(row=6, column=0, columnspan=2, pady=2, padx=10, sticky="n")
 
@@ -347,7 +347,7 @@ class App:
             self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), redirect_entry.get(), enable_redirect_var.get(), parent_mode_var.get(), self.settings_window),
             width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
         )
-        save_button.grid(row=6, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+        save_button.grid(row=7, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
     def save_action(self, action_str: str, sensitivity_str: str, redirect_url: str, enable_redirect: bool, parent_mode: bool, settings_window: ctk.CTkToplevel) -> None:
         try:
