@@ -1,4 +1,3 @@
-
 import mss
 import cv2
 import numpy as np
@@ -11,6 +10,9 @@ from pyautogui import hotkey
 from utils.config import get_close_tab_action
 import threading
 import webbrowser
+import os
+import json
+from datetime import datetime
 
 # Set device to CPU
 device = torch.device("cpu")
@@ -30,6 +32,9 @@ loading_start_time = None
 NSFW_THRESHOLD = 0.5  # Default threshold
 MOTIVATIONAL_URL = "https://www.youtube.com/shorts/8SVZLF75P2M"
 ENABLE_REDIRECT = True
+PARENT_MODE = False
+PARENT_REPORT_PATH = None
+PARENT_SCREENSHOT_DIR = None
 
 def set_nsfw_threshold(threshold):
     global NSFW_THRESHOLD
@@ -109,6 +114,40 @@ def speak_alert(content_type, score):
     time.sleep(0.1)
     # engine.say(message)
     # engine.runAndWait()
+    if PARENT_MODE:
+        try:
+            # Ensure screenshot dir exists
+            if PARENT_SCREENSHOT_DIR:
+                os.makedirs(PARENT_SCREENSHOT_DIR, exist_ok=True)
+                # Save screenshot
+                img = capture_screen()
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                screenshot_filename = f"screenshot_{timestamp}.png"
+                screenshot_path = os.path.join(PARENT_SCREENSHOT_DIR, screenshot_filename)
+                if isinstance(img, np.ndarray):
+                    img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                else:
+                    img_pil = img
+                img_pil.save(screenshot_path)
+                # Log event
+                event = {
+                    "timestamp": timestamp,
+                    "score": score,
+                    "screenshot": screenshot_filename,
+                    "content_type": content_type
+                }
+                if PARENT_REPORT_PATH:
+                    os.makedirs(os.path.dirname(PARENT_REPORT_PATH), exist_ok=True)
+                    if os.path.exists(PARENT_REPORT_PATH):
+                        with open(PARENT_REPORT_PATH, "r") as f:
+                            report = json.load(f)
+                    else:
+                        report = []
+                    report.insert(0, event)  # newest first
+                    with open(PARENT_REPORT_PATH, "w") as f:
+                        json.dump(report, f, indent=2)
+        except Exception as e:
+            print(f"Parent mode logging failed: {e}")
     if ENABLE_REDIRECT and MOTIVATIONAL_URL:
         try:
             webbrowser.get("chrome").open_new_tab(MOTIVATIONAL_URL)
