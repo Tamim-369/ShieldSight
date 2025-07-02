@@ -156,7 +156,7 @@ class App:
     def load_config(self) -> None:
         global NSFW_THRESHOLD
         default_config = {
-            "nsfw_threshold": 0.01,
+            "nsfw_threshold": 0.5,
             "close_tab_action": ["Ctrl", "w"],
             "isStarted": False,
             "motivational_url": "https://www.youtube.com/shorts/8SVZLF75P2M",
