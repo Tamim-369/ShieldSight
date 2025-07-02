@@ -62,6 +62,9 @@ class App:
         self.last_toggle_time = 0
         self.motivational_url = "https://www.youtube.com/shorts/aq8lM9HMe4E"
         self.enable_redirect = True
+        self.parent_mode = False
+        self.parent_password = ""
+        self.parent_mode_first_time = True
 
         # Config setup
         self.config_dir = Path.home() / ".Guard"
@@ -153,11 +156,14 @@ class App:
     def load_config(self) -> None:
         global NSFW_THRESHOLD
         default_config = {
-            "nsfw_threshold": 0.5,
+            "nsfw_threshold": 0.01,
             "close_tab_action": ["Ctrl", "w"],
             "isStarted": False,
-            "motivational_url": "https://www.youtube.com/shorts/aq8lM9HMe4E",
-            "enable_redirect": True
+            "motivational_url": "https://www.youtube.com/shorts/8SVZLF75P2M",
+            "enable_redirect": True,
+            "parent_mode": False,
+            "parent_password": "",
+            "parent_mode_first_time": True
         }
         try:
             if self.config_path.exists():
@@ -168,33 +174,45 @@ class App:
                     self.isStarted = config.get("isStarted", default_config["isStarted"])
                     self.motivational_url = config.get("motivational_url", default_config["motivational_url"])
                     self.enable_redirect = config.get("enable_redirect", default_config["enable_redirect"])
+                    self.parent_mode = config.get("parent_mode", default_config["parent_mode"])
+                    self.parent_password = config.get("parent_password", default_config["parent_password"])
+                    self.parent_mode_first_time = config.get("parent_mode_first_time", default_config["parent_mode_first_time"])
                     set_close_tab_action(close_tab_action)
-                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}, motivational_url={self.motivational_url}, enable_redirect={self.enable_redirect}")
+                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}, motivational_url={self.motivational_url}, enable_redirect={self.enable_redirect}, parent_mode={self.parent_mode}, parent_mode_first_time={self.parent_mode_first_time}")
             else:
                 logging.info("Config file not found, creating with defaults")
                 self.isStarted = default_config["isStarted"]
                 NSFW_THRESHOLD = default_config["nsfw_threshold"]
                 self.motivational_url = default_config["motivational_url"]
                 self.enable_redirect = default_config["enable_redirect"]
+                self.parent_mode = default_config["parent_mode"]
+                self.parent_password = default_config["parent_password"]
+                self.parent_mode_first_time = default_config["parent_mode_first_time"]
                 set_close_tab_action(default_config["close_tab_action"])
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
         except Exception as e:
             logging.error(f"Error loading config from {self.config_path}: {e}, using defaults")
             self.isStarted = default_config["isStarted"]
             NSFW_THRESHOLD = default_config["nsfw_threshold"]
             self.motivational_url = default_config["motivational_url"]
             self.enable_redirect = default_config["enable_redirect"]
+            self.parent_mode = default_config["parent_mode"]
+            self.parent_password = default_config["parent_password"]
+            self.parent_mode_first_time = default_config["parent_mode_first_time"]
             set_close_tab_action(default_config["close_tab_action"])
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
 
-    def save_config(self, threshold: float, close_tab_action: list, is_started: bool, motivational_url: str, enable_redirect: bool) -> None:
+    def save_config(self, threshold: float, close_tab_action: list, is_started: bool, motivational_url: str, enable_redirect: bool, parent_mode: bool, parent_password: str, parent_mode_first_time: bool) -> None:
         try:
             config = {
                 "nsfw_threshold": float(threshold),
                 "close_tab_action": close_tab_action,
                 "isStarted": bool(is_started),
                 "motivational_url": motivational_url,
-                "enable_redirect": enable_redirect
+                "enable_redirect": enable_redirect,
+                "parent_mode": parent_mode,
+                "parent_password": parent_password,
+                "parent_mode_first_time": parent_mode_first_time
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -251,7 +269,7 @@ class App:
         stop_monitoring()
         if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False, self.motivational_url, self.enable_redirect)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
         if hasattr(self, 'icon'):
             self.icon.stop()
         self.root.destroy()
@@ -262,11 +280,11 @@ class App:
             return
         self.settings_window: ctk.CTkToplevel = ctk.CTkToplevel(self.root)
         self.settings_window.title("Settings")
-        self.settings_window.geometry("400x300")
+        self.settings_window.geometry("400x400")
         self.settings_window.transient(self.root)
         self.settings_window.grab_set()
 
-        for row in range(5):
+        for row in range(7):
             self.settings_window.grid_rowconfigure(row, weight=1)
         self.settings_window.grid_columnconfigure(0, weight=1)
         self.settings_window.grid_columnconfigure(1, weight=1)
@@ -293,13 +311,32 @@ class App:
         enable_redirect_check = ctk.CTkCheckBox(self.settings_window, text="Enable Motivational Redirect", variable=enable_redirect_var, font=ctk.CTkFont("Segoe UI", 12))
         enable_redirect_check.grid(row=3, column=0, columnspan=2, pady=10, padx=10, sticky="w")
 
+        parent_mode_var = ctk.BooleanVar(value=self.parent_mode)
+        parent_mode_check = ctk.CTkCheckBox(self.settings_window, text="Enable Parent Mode", variable=parent_mode_var, font=ctk.CTkFont("Segoe UI", 12))
+        parent_mode_check.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="w")
+
+        def on_get_report():
+            # Prompt for password
+            import tkinter.simpledialog
+            pw = tkinter.simpledialog.askstring("Parent Password", "Enter parent password:", show='*', parent=self.settings_window)
+            if pw == self.parent_password:
+                from utils.parent_report import generate_parent_report_pdf
+                generate_parent_report_pdf()
+            else:
+                import tkinter.messagebox
+                tkinter.messagebox.showerror("Error", "Incorrect password.")
+
+        get_report_button = ctk.CTkButton(self.settings_window, text="Get Report", command=on_get_report, width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1")
+        if self.parent_mode:
+            get_report_button.grid(row=5, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+
         save_button = ctk.CTkButton(
-            self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), redirect_entry.get(), enable_redirect_var.get(), self.settings_window),
+            self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), redirect_entry.get(), enable_redirect_var.get(), parent_mode_var.get(), self.settings_window),
             width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
         )
-        save_button.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+        save_button.grid(row=6, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str: str, sensitivity_str: str, redirect_url: str, enable_redirect: bool, settings_window: ctk.CTkToplevel) -> None:
+    def save_action(self, action_str: str, sensitivity_str: str, redirect_url: str, enable_redirect: bool, parent_mode: bool, settings_window: ctk.CTkToplevel) -> None:
         try:
             global NSFW_THRESHOLD
             threshold = NSFW_THRESHOLD
@@ -322,11 +359,24 @@ class App:
 
             self.motivational_url = redirect_url.strip()
             self.enable_redirect = enable_redirect
-            self.save_config(threshold, close_tab_action, self.isStarted, self.motivational_url, self.enable_redirect)
+            # Handle parent mode password prompt
+            if parent_mode and not self.parent_mode:
+                # Enabling parent mode for the first time
+                import tkinter.simpledialog
+                pw1 = tkinter.simpledialog.askstring("Set Parent Password", "Set a parent password:", show='*', parent=settings_window)
+                pw2 = tkinter.simpledialog.askstring("Confirm Password", "Confirm parent password:", show='*', parent=settings_window)
+                if pw1 != pw2 or not pw1:
+                    import tkinter.messagebox
+                    tkinter.messagebox.showerror("Error", "Passwords do not match or are empty.")
+                    return
+                self.parent_password = pw1
+                self.parent_mode_first_time = False
+            self.parent_mode = parent_mode
+            self.save_config(threshold, close_tab_action, self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
             settings_window.destroy()
         except ValueError as e:
             error_label = ctk.CTkLabel(settings_window, text=str(e), font=ctk.CTkFont("Segoe UI", 12), text_color="red")
-            error_label.grid(row=5, column=0, columnspan=2, pady=5)
+            error_label.grid(row=7, column=0, columnspan=2, pady=5)
 
     def start_monitoring(self) -> None:
         if self.status == "Running":
@@ -358,10 +408,13 @@ class App:
         else:
             logging.info(f"Model loaded in {elapsed_time:.2f} seconds")
             self.model_loaded_once = True
-            # Pass motivational_url and enable_redirect to monitor
+            # Pass motivational_url and enable_redirect and parent_mode to monitor
             import monitor.monitor as monitor_mod
             monitor_mod.MOTIVATIONAL_URL = self.motivational_url
             monitor_mod.ENABLE_REDIRECT = self.enable_redirect
+            monitor_mod.PARENT_MODE = self.parent_mode
+            monitor_mod.PARENT_REPORT_PATH = str(self.config_dir / "parent_report.json")
+            monitor_mod.PARENT_SCREENSHOT_DIR = str(self.config_dir / "screenshots")
             self.running_thread = threading.Thread(target=main, daemon=True)
             self.running_thread.start()
             self.status = "Running"
@@ -374,7 +427,7 @@ class App:
                 if self.is_visible:
                     self.toggle_window()
             self.isStarted = True
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
 
     def handle_model_error(self, error_msg: str) -> None:
         self.status = "Stopped"
@@ -396,7 +449,7 @@ class App:
             self.loader_label.configure(text="")
             self.update_tray_status()
             self.isStarted = False
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
             logging.info("Monitoring stopped")
         else:
             self.start_monitoring()
@@ -406,7 +459,7 @@ class App:
         if not self.run_in_background.get() and self.status == "Running":
             self.toggle_monitoring()
             self.toggle_window()
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
 
     def on_closing(self) -> None:
         if self.run_in_background.get() and self.status == "Running":
