@@ -318,6 +318,8 @@ class App:
         def on_get_report():
             # Stop monitoring before generating the report
             self.toggle_monitoring()  # This will stop if running, start if stopped
+            self.isStarted = False
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect, self.parent_mode, self.parent_password, self.parent_mode_first_time)
             # Prompt for password
             import tkinter.simpledialog
             pw = tkinter.simpledialog.askstring("Parent Password", "Enter parent password:", show='*', parent=self.settings_window)
