@@ -60,6 +60,8 @@ class App:
         self.status = "Stopped"
         self.model_loaded_once = False
         self.last_toggle_time = 0
+        self.motivational_url = "https://www.youtube.com/shorts/aq8lM9HMe4E"
+        self.enable_redirect = True
 
         # Config setup
         self.config_dir = Path.home() / ".Guard"
@@ -153,7 +155,9 @@ class App:
         default_config = {
             "nsfw_threshold": 0.01,
             "close_tab_action": ["Ctrl", "w"],
-            "isStarted": False
+            "isStarted": False,
+            "motivational_url": "https://www.youtube.com/shorts/aq8lM9HMe4E",
+            "enable_redirect": True
         }
         try:
             if self.config_path.exists():
@@ -162,27 +166,35 @@ class App:
                     NSFW_THRESHOLD = float(config.get("nsfw_threshold", default_config["nsfw_threshold"]))
                     close_tab_action = config.get("close_tab_action", default_config["close_tab_action"])
                     self.isStarted = config.get("isStarted", default_config["isStarted"])
+                    self.motivational_url = config.get("motivational_url", default_config["motivational_url"])
+                    self.enable_redirect = config.get("enable_redirect", default_config["enable_redirect"])
                     set_close_tab_action(close_tab_action)
-                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}")
+                    logging.info(f"Loaded config: nsfw_threshold={NSFW_THRESHOLD}, close_tab_action={close_tab_action}, isStarted={self.isStarted}, motivational_url={self.motivational_url}, enable_redirect={self.enable_redirect}")
             else:
                 logging.info("Config file not found, creating with defaults")
                 self.isStarted = default_config["isStarted"]
                 NSFW_THRESHOLD = default_config["nsfw_threshold"]
+                self.motivational_url = default_config["motivational_url"]
+                self.enable_redirect = default_config["enable_redirect"]
                 set_close_tab_action(default_config["close_tab_action"])
-                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+                self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
         except Exception as e:
             logging.error(f"Error loading config from {self.config_path}: {e}, using defaults")
             self.isStarted = default_config["isStarted"]
             NSFW_THRESHOLD = default_config["nsfw_threshold"]
+            self.motivational_url = default_config["motivational_url"]
+            self.enable_redirect = default_config["enable_redirect"]
             set_close_tab_action(default_config["close_tab_action"])
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
 
-    def save_config(self, threshold: float, close_tab_action: list, is_started: bool) -> None:
+    def save_config(self, threshold: float, close_tab_action: list, is_started: bool, motivational_url: str, enable_redirect: bool) -> None:
         try:
             config = {
                 "nsfw_threshold": float(threshold),
                 "close_tab_action": close_tab_action,
-                "isStarted": bool(is_started)
+                "isStarted": bool(is_started),
+                "motivational_url": motivational_url,
+                "enable_redirect": enable_redirect
             }
             with open(self.config_path, 'w') as f:
                 json.dump(config, f, indent=2)
@@ -239,7 +251,7 @@ class App:
         stop_monitoring()
         if self.running_thread and self.running_thread.is_alive():
             self.running_thread.join(timeout=2)
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), False, self.motivational_url, self.enable_redirect)
         if hasattr(self, 'icon'):
             self.icon.stop()
         self.root.destroy()
@@ -250,11 +262,11 @@ class App:
             return
         self.settings_window: ctk.CTkToplevel = ctk.CTkToplevel(self.root)
         self.settings_window.title("Settings")
-        self.settings_window.geometry("400x200")
+        self.settings_window.geometry("400x300")
         self.settings_window.transient(self.root)
         self.settings_window.grab_set()
 
-        for row in range(3):
+        for row in range(5):
             self.settings_window.grid_rowconfigure(row, weight=1)
         self.settings_window.grid_columnconfigure(0, weight=1)
         self.settings_window.grid_columnconfigure(1, weight=1)
@@ -271,13 +283,23 @@ class App:
         sensitivity_entry.insert(0, str(NSFW_THRESHOLD))
         sensitivity_entry.grid(row=1, column=1, pady=10, padx=10, sticky="ew")
 
+        redirect_label = ctk.CTkLabel(self.settings_window, text="Motivational Redirect URL:", font=ctk.CTkFont("Segoe UI", 14), text_color="white")
+        redirect_label.grid(row=2, column=0, pady=10, padx=10, sticky="w")
+        redirect_entry = ctk.CTkEntry(self.settings_window, font=ctk.CTkFont("Segoe UI", 12))
+        redirect_entry.insert(0, self.motivational_url)
+        redirect_entry.grid(row=2, column=1, pady=10, padx=10, sticky="ew")
+
+        enable_redirect_var = ctk.BooleanVar(value=self.enable_redirect)
+        enable_redirect_check = ctk.CTkCheckBox(self.settings_window, text="Enable Motivational Redirect", variable=enable_redirect_var, font=ctk.CTkFont("Segoe UI", 12))
+        enable_redirect_check.grid(row=3, column=0, columnspan=2, pady=10, padx=10, sticky="w")
+
         save_button = ctk.CTkButton(
-            self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), self.settings_window),
+            self.settings_window, text="Save", command=lambda: self.save_action(action_entry.get(), sensitivity_entry.get(), redirect_entry.get(), enable_redirect_var.get(), self.settings_window),
             width=100, height=30, font=ctk.CTkFont("Segoe UI", 12, weight="bold"), fg_color="#2e89ff", hover_color="#1e5fc1"
         )
-        save_button.grid(row=2, column=0, columnspan=2, pady=10, padx=10, sticky="n")
+        save_button.grid(row=4, column=0, columnspan=2, pady=10, padx=10, sticky="n")
 
-    def save_action(self, action_str: str, sensitivity_str: str, settings_window: ctk.CTkToplevel) -> None:
+    def save_action(self, action_str: str, sensitivity_str: str, redirect_url: str, enable_redirect: bool, settings_window: ctk.CTkToplevel) -> None:
         try:
             global NSFW_THRESHOLD
             threshold = NSFW_THRESHOLD
@@ -298,11 +320,13 @@ class App:
                 close_tab_action = keys
                 logging.info(f"Updated close_tab_action to {keys}")
 
-            self.save_config(threshold, close_tab_action, self.isStarted)
+            self.motivational_url = redirect_url.strip()
+            self.enable_redirect = enable_redirect
+            self.save_config(threshold, close_tab_action, self.isStarted, self.motivational_url, self.enable_redirect)
             settings_window.destroy()
         except ValueError as e:
             error_label = ctk.CTkLabel(settings_window, text=str(e), font=ctk.CTkFont("Segoe UI", 12), text_color="red")
-            error_label.grid(row=3, column=0, columnspan=2, pady=5)
+            error_label.grid(row=5, column=0, columnspan=2, pady=5)
 
     def start_monitoring(self) -> None:
         if self.status == "Running":
@@ -334,6 +358,10 @@ class App:
         else:
             logging.info(f"Model loaded in {elapsed_time:.2f} seconds")
             self.model_loaded_once = True
+            # Pass motivational_url and enable_redirect to monitor
+            import monitor.monitor as monitor_mod
+            monitor_mod.MOTIVATIONAL_URL = self.motivational_url
+            monitor_mod.ENABLE_REDIRECT = self.enable_redirect
             self.running_thread = threading.Thread(target=main, daemon=True)
             self.running_thread.start()
             self.status = "Running"
@@ -346,7 +374,7 @@ class App:
                 if self.is_visible:
                     self.toggle_window()
             self.isStarted = True
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
 
     def handle_model_error(self, error_msg: str) -> None:
         self.status = "Stopped"
@@ -368,7 +396,7 @@ class App:
             self.loader_label.configure(text="")
             self.update_tray_status()
             self.isStarted = False
-            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+            self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
             logging.info("Monitoring stopped")
         else:
             self.start_monitoring()
@@ -378,7 +406,7 @@ class App:
         if not self.run_in_background.get() and self.status == "Running":
             self.toggle_monitoring()
             self.toggle_window()
-        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted)
+        self.save_config(NSFW_THRESHOLD, get_close_tab_action(), self.isStarted, self.motivational_url, self.enable_redirect)
 
     def on_closing(self) -> None:
         if self.run_in_background.get() and self.status == "Running":

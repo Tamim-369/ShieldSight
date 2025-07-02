@@ -9,6 +9,7 @@ import torch
 from pyautogui import hotkey
 from utils.config import get_close_tab_action
 import threading
+import webbrowser
 
 # Set device to CPU
 device = torch.device("cpu")
@@ -26,6 +27,8 @@ loading_error = None
 model_lock = threading.Lock()
 loading_start_time = None
 NSFW_THRESHOLD = 0.01  # Default threshold
+MOTIVATIONAL_URL = "https://www.youtube.com/shorts/aq8lM9HMe4E"
+ENABLE_REDIRECT = True
 
 def set_nsfw_threshold(threshold):
     global NSFW_THRESHOLD
@@ -105,6 +108,11 @@ def speak_alert(content_type, score):
     time.sleep(0.1)
     # engine.say(message)
     # engine.runAndWait()
+    if ENABLE_REDIRECT and MOTIVATIONAL_URL:
+        try:
+            webbrowser.get("chrome").open_new_tab(MOTIVATIONAL_URL)
+        except Exception:
+            webbrowser.open_new_tab(MOTIVATIONAL_URL)
 
 def main():
     global classifier, loading_complete
